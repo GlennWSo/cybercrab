@@ -104,6 +104,41 @@ fn toggle_grab(mut window: Single<&mut Window, With<PrimaryWindow>>, mut cmd: Co
     cmd.trigger(GrabEvent(window.focused));
 }
 
+fn shoot_ball(
+    input: Res<ButtonInput<MouseButton>>,
+    player: Single<&Transform, With<Player>>,
+    mut spawner: EventWriter<BallSpawn>,
+    window: Single<&Window, With<PrimaryWindow>>,
+) {
+    if window.cursor_options.visible {
+        return;
+    }
+    if !input.just_pressed(MouseButton::Left) {
+        return;
+    }
+    spawner.write(BallSpawn {
+        position: player.translation,
+    });
+}
+
+fn spawn_ball(
+    mut events: EventReader<BallSpawn>,
+    mut cmd: Commands,
+    mut mesh_assets: ResMut<Assets<Mesh>>,
+    mut mat_assets: ResMut<Assets<StandardMaterial>>,
+) {
+    for spawn in events.read() {
+        let mat_handle = mat_assets.add(StandardMaterial::default());
+        let mesh_handle = mesh_assets.add(Sphere::new(1.0));
+        let bundle = (
+            Transform::from_translation(spawn.position),
+            MeshMaterial3d(mat_handle),
+            Mesh3d(mesh_handle),
+        );
+        cmd.spawn(bundle);
+    }
+}
+
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins);
@@ -117,7 +152,15 @@ fn main() {
             toggle_grab.run_if(input_just_released(KeyCode::Escape)),
         ),
     );
+    app.add_systems(
+        Update,
+        (
+            spawn_ball,
+            shoot_ball.before(spawn_ball).before(focus_events),
+        ),
+    );
     app.add_observer(apply_grab);
+    app.add_event::<BallSpawn>();
     app.run();
 }
 
@@ -126,3 +169,8 @@ struct Player;
 
 #[derive(Event, Deref)]
 struct GrabEvent(bool);
+
+#[derive(Event)]
+struct BallSpawn {
+    position: Vec3,
+}
