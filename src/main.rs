@@ -6,6 +6,9 @@ use bevy::{
     window::{CursorGrabMode, PrimaryWindow, WindowFocused},
 };
 
+const PI2: f32 = PI / 2.0;
+const PLAYER_SPEED: f32 = 2000.0;
+
 fn spawn_camera(mut cmd: Commands) {
     cmd.spawn((Camera3d::default(), Player));
 }
@@ -33,8 +36,6 @@ fn spawn_map(
     }
 }
 
-const PI2: f32 = PI / 2.0;
-
 fn player_look(
     mut player: Single<&mut Transform, With<Player>>,
     window: Single<&Window, With<PrimaryWindow>>,
@@ -45,13 +46,41 @@ fn player_look(
         return;
     }
     let dt = time.delta_secs();
-    let sensitivity = 100.0 / window.width().min(window.height());
+    let sensitivity = 50.0 / window.width().min(window.height());
     use EulerRot::YXZ;
     let (mut yaw, mut pitch, _) = player.rotation.to_euler(YXZ);
     yaw -= mouse_motion.delta.x * dt * sensitivity;
     pitch -= mouse_motion.delta.y * dt * sensitivity;
     pitch = pitch.clamp(-PI2, PI2);
     player.rotation = Quat::from_euler(YXZ, yaw, pitch, 0.0);
+}
+
+fn player_move(
+    mut player: Single<&mut Transform, With<Player>>,
+    input: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    let mut delta = Vec3::ZERO;
+    if input.pressed(KeyCode::KeyA) {
+        delta.x -= 1.0;
+    }
+    if input.pressed(KeyCode::KeyD) {
+        delta.x += 1.0;
+    }
+    if input.pressed(KeyCode::KeyW) {
+        delta.z += 1.0;
+    }
+    if input.pressed(KeyCode::KeyS) {
+        delta.z -= 1.0;
+    }
+    let forward = player.forward().as_vec3() * delta.z;
+    let right = player.right().as_vec3() * delta.x;
+    let mut to_move = forward + right;
+    to_move.y = 0.0;
+    to_move = to_move.normalize_or_zero() * dt;
+    println!("{:#?}", to_move);
+    player.translation += to_move * dt * PLAYER_SPEED;
 }
 
 fn apply_grab(grab: Trigger<GrabEvent>, mut window: Single<&mut Window, With<PrimaryWindow>>) {
@@ -79,6 +108,7 @@ fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins);
     app.add_systems(Startup, (spawn_camera, spawn_map));
+    app.add_systems(Update, (player_look, player_move).chain());
     app.add_systems(
         Update,
         (
