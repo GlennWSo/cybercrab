@@ -93,7 +93,7 @@ fn apply_grab(grab: Trigger<GrabEvent>, mut window: Single<&mut Window, With<Pri
     }
 }
 
-fn focus_events(mut events: EventReader<WindowFocused>, mut cmd: Commands) {
+fn handle_focus_events(mut events: EventReader<WindowFocused>, mut cmd: Commands) {
     if let Some(event) = events.read().last() {
         cmd.trigger(GrabEvent(event.focused));
     }
@@ -148,7 +148,7 @@ fn main() {
         Update,
         (
             player_look,
-            focus_events,
+            handle_focus_events,
             toggle_grab.run_if(input_just_released(KeyCode::Escape)),
         ),
     );
@@ -156,7 +156,7 @@ fn main() {
         Update,
         (
             spawn_ball,
-            shoot_ball.before(spawn_ball).before(focus_events),
+            shoot_ball.before(spawn_ball).before(handle_focus_events),
         ),
     );
     app.add_observer(apply_grab);
