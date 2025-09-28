@@ -1,6 +1,10 @@
 use std::f32::consts::PI;
 
-use bevy::{input::mouse::AccumulatedMouseMotion, prelude::*, window::PrimaryWindow};
+use bevy::{
+    input::{common_conditions::input_just_released, mouse::AccumulatedMouseMotion},
+    prelude::*,
+    window::{CursorGrabMode, PrimaryWindow, WindowFocused},
+};
 
 fn spawn_camera(mut cmd: Commands) {
     cmd.spawn((Camera3d::default(), Player));
@@ -50,13 +54,45 @@ fn player_look(
     player.rotation = Quat::from_euler(YXZ, yaw, pitch, 0.0);
 }
 
+fn apply_grab(grab: Trigger<GrabEvent>, mut window: Single<&mut Window, With<PrimaryWindow>>) {
+    if **grab {
+        window.cursor_options.visible = false;
+        window.cursor_options.grab_mode = CursorGrabMode::Locked;
+    } else {
+        window.cursor_options.visible = true;
+        window.cursor_options.grab_mode = CursorGrabMode::None;
+    }
+}
+
+fn focus_events(mut events: EventReader<WindowFocused>, mut cmd: Commands) {
+    if let Some(event) = events.read().last() {
+        cmd.trigger(GrabEvent(event.focused));
+    }
+}
+
+fn toggle_grab(mut window: Single<&mut Window, With<PrimaryWindow>>, mut cmd: Commands) {
+    window.focused = !window.focused;
+    cmd.trigger(GrabEvent(window.focused));
+}
+
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins);
     app.add_systems(Startup, (spawn_camera, spawn_map));
-    app.add_systems(Update, player_look);
+    app.add_systems(
+        Update,
+        (
+            player_look,
+            focus_events,
+            toggle_grab.run_if(input_just_released(KeyCode::Escape)),
+        ),
+    );
+    app.add_observer(apply_grab);
     app.run();
 }
 
 #[derive(Component)]
 struct Player;
+
+#[derive(Event, Deref)]
+struct GrabEvent(bool);
