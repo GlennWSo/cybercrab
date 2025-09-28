@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{input::mouse::AccumulatedMouseMotion, prelude::*};
+use bevy::{input::mouse::AccumulatedMouseMotion, prelude::*, window::PrimaryWindow};
 
 fn spawn_camera(mut cmd: Commands) {
     cmd.spawn((Camera3d::default(), Player));
@@ -33,11 +33,15 @@ const PI2: f32 = PI / 2.0;
 
 fn player_look(
     mut player: Single<&mut Transform, With<Player>>,
+    window: Single<&Window, With<PrimaryWindow>>,
     mouse_motion: Res<AccumulatedMouseMotion>,
     time: Res<Time>,
 ) {
+    if !window.focused {
+        return;
+    }
     let dt = time.delta_secs();
-    let sensitivity = 0.1;
+    let sensitivity = 100.0 / window.width().min(window.height());
     use EulerRot::YXZ;
     let (mut yaw, mut pitch, _) = player.rotation.to_euler(YXZ);
     yaw -= mouse_motion.delta.x * dt * sensitivity;
