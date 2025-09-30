@@ -5,6 +5,10 @@ use bevy::{
     prelude::*,
     window::{CursorGrabMode, PrimaryWindow, WindowFocused},
 };
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_inspector_egui::{bevy_egui::EguiPlugin, prelude::*};
+
+use cybercrab::{DummyPlugin, TbanaPlugin};
 
 const PI2: f32 = PI / 2.0;
 const PLAYER_SPEED: f32 = 2000.0;
@@ -79,7 +83,6 @@ fn player_move(
     let mut to_move = forward + right;
     to_move.y = 0.0;
     to_move = to_move.normalize_or_zero() * dt;
-    println!("{:#?}", to_move);
     player.translation += to_move * dt * PLAYER_SPEED;
 }
 
@@ -142,6 +145,10 @@ fn spawn_ball(
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins);
+    app.add_plugins(DummyPlugin);
+    app.add_plugins(EguiPlugin::default());
+    app.add_plugins(WorldInspectorPlugin::new());
+
     app.add_systems(Startup, (spawn_camera, spawn_map));
     app.add_systems(Update, (player_look, player_move).chain());
     app.add_systems(
