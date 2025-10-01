@@ -1,37 +1,66 @@
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 
-struct IoPlugin;
+pub struct IoPlugin;
 
 impl Plugin for IoPlugin {
     fn build(&self, app: &mut App) {
-        todo!()
+        app.register_type::<DeviceNetwork>();
+        app.init_resource::<DeviceNetwork>();
     }
 }
 
-trait GetData {
-    fn get_data(&self) -> &[u8];
+pub type Address = u32;
+
+#[derive(Resource, Default, Reflect)]
+#[reflect(Resource)]
+pub struct DeviceNetwork {
+    address_map: HashMap<Address, Entity>,
 }
 
+pub trait ViewData {
+    fn view_all(&self) -> &[u8];
+    fn view_input(&self) -> &[u8] {
+        self.view_all()
+    }
+    fn view_bit(&self, address: u8, idx: u8) -> bool {
+        let mask: u8 = 1 << idx;
+        let hit = mask & self.view_all()[address as usize];
+        hit > 0
+    }
+    fn view_input_bit(&self, address: u8, idx: u8) -> bool {
+        let mask: u8 = 1 << idx;
+        let hit = mask & self.view_input()[address as usize];
+        hit > 0
+    }
+}
+
+trait GetOutput {}
+
 #[derive(Component)]
-pub struct InputDevice<const N: usize> {
-    pub hostname: &'static str,
-    pub address: u32,
-    data: [u8; N],
+pub struct InputDevice<const Bytes: usize> {
+    data: [u8; Bytes],
+}
+
+impl<const N: usize> ViewData for InputDevice<N> {
+    fn view_all(&self) -> &[u8] {
+        &self.data
+    }
 }
 
 impl<const N: usize> InputDevice<N> {
-    pub fn new(name: &'static str, address: u32) -> Self {
-        Self {
-            hostname: name,
-            address,
-            data: [0; N],
-        }
+    fn new() -> Self {
+        Self { data: [0; N] }
     }
-}
-
-impl<const N: usize> GetData for InputDevice<N> {
-    fn get_data(&self) -> &[u8] {
-        &self.data
+    pub fn spawn(
+        cmd: &mut Commands,
+        net: &mut DeviceNetwork,
+        name: &'static str,
+        address: Address,
+    ) -> Entity {
+        let new_device = Self::new();
+        let id = cmd.spawn((new_device, Name::new(name))).id();
+        net.address_map.insert(address, id);
+        id
     }
 }
 
@@ -41,23 +70,26 @@ pub enum DataSlice {
     Slice(u8),
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship(relationship_target=AttachedThings)]
 pub struct ConnectedTo(pub Entity);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship_target(relationship = ConnectedTo)]
 pub struct AttachedThings(Vec<Entity>);
 
 #[derive(Component)]
 pub struct IoSlot {
-    pub address: u8,
-    pub offset: DataSlice,
+    pub byte_idx: u8,
+    pub slice: DataSlice,
 }
 
 impl IoSlot {
     pub fn new(address: u8, offset: DataSlice) -> Self {
-        Self { address, offset }
+        Self {
+            byte_idx: address,
+            slice: offset,
+        }
     }
 }
 

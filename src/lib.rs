@@ -8,7 +8,9 @@ pub use tbana::TbanaPlugin;
 use tbana::TbanaBundle;
 
 use crate::{
-    io::{AttachedThings, FotoCell, IoSlot, IoThing},
+    io::{
+        Address, AttachedThings, ConnectedTo, DeviceNetwork, FotoCell, IoPlugin, IoSlot, IoThing,
+    },
     tbana::PushTo,
 };
 
@@ -17,20 +19,24 @@ pub struct DummyPlugin;
 impl Plugin for DummyPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(TbanaPlugin);
+        app.add_plugins(IoPlugin);
         app.add_systems(Startup, spawn_some_stuff);
     }
 }
 
-fn spawn_some_stuff(mut cmd: Commands) {
-    let input_device = io::InputDevice::<1>::new("InputNode1", 1);
-    cmd.spawn((
-        input_device,
-        related!(AttachedThings[
-            (FotoCell, Name::new("Fotocell1"), IoSlot::new(0, io::DataSlice::Bit(0))),
-            (FotoCell, Name::new("Fotocell2"), IoSlot::new(0, io::DataSlice::Bit(1))),
-            (FotoCell, Name::new("Fotocell3"), IoSlot::new(0, io::DataSlice::Bit(2))),
-        ]),
-    ));
+fn spawn_some_stuff(mut cmd: Commands, mut net: ResMut<DeviceNetwork>) {
+    let device_address: Address = 1;
+    let device_id = io::InputDevice::<2>::spawn(&mut cmd, &mut net, "inputmodule1", device_address);
+
+    for i in 1..=4 {
+        let fotocell = (
+            FotoCell,
+            Name::new(format!("fotocell{i}")),
+            ConnectedTo(device_id),
+            IoSlot::new(0, io::DataSlice::Bit(i)),
+        );
+        cmd.spawn(fotocell);
+    }
 
     let n = 8;
 
