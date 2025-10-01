@@ -11,7 +11,7 @@ use bevy_inspector_egui::{bevy_egui::EguiPlugin, prelude::*};
 use cybercrab::{DummyPlugin, TbanaPlugin};
 
 const PI2: f32 = PI / 2.0;
-const PLAYER_SPEED: f32 = 2000.0;
+const PLAYER_SPEED: f32 = 1000.0;
 
 fn spawn_camera(mut cmd: Commands) {
     let mut position = Vec3::default();
@@ -77,6 +77,8 @@ fn player_move(
     }
     let dt = time.delta_secs();
     let mut delta = Vec3::ZERO;
+    let mut to_move = Vec3::ZERO;
+
     if input.pressed(KeyCode::KeyA) {
         delta.x -= 1.0;
     }
@@ -90,10 +92,10 @@ fn player_move(
         delta.z -= 1.0;
     }
     if input.pressed(KeyCode::Space) {
-        delta.y += 1.0;
+        to_move.y += 0.5;
     }
     if input.pressed(KeyCode::KeyC) {
-        delta.y -= 1.0;
+        to_move.y -= 0.5;
     }
 
     let mut xz_direction = player.forward().as_vec3();
@@ -102,7 +104,7 @@ fn player_move(
     let forward = xz_direction * delta.z;
     let to_right = Quat::from_rotation_y(-90_f32.to_radians());
     let right = (to_right * xz_direction) * delta.x;
-    let mut to_move = forward + right;
+    to_move += forward + right;
     to_move = to_move.normalize_or_zero() * dt;
     player.translation += to_move * dt * PLAYER_SPEED;
 }

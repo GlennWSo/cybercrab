@@ -58,7 +58,7 @@ fn spawn_some_stuff(
         .add_children(&fotocells[0..4])
         .id();
 
-    let spaceing = 6.0;
+    let spaceing = 5.3;
     for i in (1..n).rev() {
         translation.z += spaceing;
         let bundle = (
