@@ -33,7 +33,6 @@ impl Plugin for DummyPlugin {
 fn spawn_some_stuff(
     mut cmd: Commands,
     mut net: ResMut<DeviceNetwork>,
-    mut polylines: ResMut<Assets<Polyline>>,
     fotocell_assets: Res<FotocellAssets>,
     tbana_assets: Res<TBanaAssets>,
 ) {
@@ -55,22 +54,12 @@ fn spawn_some_stuff(
                 z,
             };
             let mut transform = Transform::from_translation(coord);
-            transform.rotate_local_y(90_f32.to_radians());
+            transform.rotate_local_y(-90_f32.to_radians());
 
             let name = format!("fotocell_{i}");
             let io_slot = IoSlot::new(ptr, io::DataSlice::Bit(idx));
             let fotocell = FotocellBundle::new(name, io_slot, &fotocell_assets, device_id);
-            let laser = LaserBundle::new(
-                Vec3::with_z(
-                    Vec3 {
-                        z: 2.0,
-                        ..default()
-                    },
-                    z,
-                ),
-                &fotocell_assets,
-                &mut polylines,
-            );
+            let laser = LaserBundle::new(&fotocell_assets);
             cmd.spawn((fotocell, transform)).with_child(laser).id()
         })
         .collect();

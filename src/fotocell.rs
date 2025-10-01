@@ -22,11 +22,14 @@ fn load_fotocell_assets(
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
     mut polylines_materials: ResMut<Assets<PolylineMaterial>>,
+    mut polylines: ResMut<Assets<Polyline>>,
     mut fotocell_assets: ResMut<FotocellAssets>,
 ) {
     fotocell_assets.emmiter = mesh_assets.add(Extrusion::new(Rectangle::new(0.02, 0.02), 0.14));
-
-    fotocell_assets.foto_materials.emmiter = material_assets.add(StandardMaterial {
+    fotocell_assets.laser_poly = polylines.add(Polyline {
+        vertices: vec![Vec3::ZERO, Vec3::ZERO.with_z(0.5)],
+    });
+    material_assets.add(StandardMaterial {
         base_color: css::HOT_PINK.into(),
         ..Default::default()
     });
@@ -60,20 +63,12 @@ pub struct LaserBundle {
 }
 
 impl LaserBundle {
-    pub fn new(target: Vec3, assets: &FotocellAssets, polylines: &mut Assets<Polyline>) -> Self {
-        let poly = polylines.add(Polyline {
-            vertices: vec![
-                Vec3 {
-                    z: 0.001,
-                    ..default()
-                },
-                target,
-            ],
-        });
-        let linematerial = PolylineMaterialHandle(assets.foto_materials.laser_normal.clone());
+    pub fn new(assets: &FotocellAssets) -> Self {
+        let polyline = PolylineHandle(assets.laser_poly.clone());
+        let material = PolylineMaterialHandle(assets.foto_materials.laser_normal.clone());
         let poly = PolylineBundle {
-            polyline: PolylineHandle(poly),
-            material: linematerial,
+            polyline,
+            material,
             ..default()
         };
         Self {
@@ -120,7 +115,6 @@ impl FotocellBundle {
 struct FotoCellMaterials {
     emmiter: Handle<StandardMaterial>,
     reflector: Handle<StandardMaterial>,
-    laser_poly: Handle<Polyline>,
     laser_normal: Handle<PolylineMaterial>,
     laser_triggerd: Handle<PolylineMaterial>,
 }
@@ -128,6 +122,7 @@ struct FotoCellMaterials {
 #[derive(Resource, Default)]
 pub struct FotocellAssets {
     emmiter: Handle<Mesh>,
+    laser_poly: Handle<Polyline>,
     reflector: Handle<Mesh>,
     foto_materials: FotoCellMaterials,
 }
