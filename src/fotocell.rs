@@ -4,6 +4,7 @@ use bevy::{color::palettes::css, prelude::*};
 
 use crate::{
     io::{Address, ConnectedTo, DeviceNetwork, IoSlot},
+    sysorder::InitSet,
     tbana::load_assets,
 };
 
@@ -12,7 +13,7 @@ pub struct FotocellPlugin;
 impl Plugin for FotocellPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<FotocellAssets>();
-        app.add_systems(Startup, load_fotocell_assets.before(load_assets));
+        app.add_systems(Startup, load_fotocell_assets.in_set(InitSet::LoadAssets));
     }
 }
 

@@ -4,6 +4,7 @@ use bevy::color::palettes::css;
 use bevy::prelude::*;
 
 use crate::shiftreg::Slot;
+use crate::sysorder::InitSet;
 
 pub struct TbanaPlugin;
 
@@ -15,7 +16,7 @@ impl Plugin for TbanaPlugin {
         app.register_type::<PullFrom>();
         app.register_type::<Giver>();
         app.init_resource::<TBanaAssets>();
-        app.add_systems(Startup, load_assets);
+        app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
     }
 }
 
