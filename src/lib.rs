@@ -40,8 +40,6 @@ fn spawn_some_stuff(
     fotocell_assets: Res<FotocellAssets>,
     tbana_assets: Res<TBanaAssets>,
 ) {
-    let detail = (Detail,);
-
     let device_address: Address = 1;
     const SIZE: usize = 4;
     // spawn input node with SIZE*8 bits
