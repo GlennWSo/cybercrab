@@ -38,18 +38,19 @@ pub trait ViewData {
 
 trait GetOutput {}
 
-#[derive(Component)]
-pub struct InputDevice<const Bytes: usize> {
-    data: [u8; Bytes],
+#[derive(Component, Reflect)]
+/// input device with NB bytes of IO inputs
+pub struct DigitalInputDevice<const NB: usize> {
+    data: [u8; NB],
 }
 
-impl<const N: usize> ViewData for InputDevice<N> {
+impl<const N: usize> ViewData for DigitalInputDevice<N> {
     fn view_all(&self) -> &[u8] {
         &self.data
     }
 }
 
-impl<const N: usize> InputDevice<N> {
+impl<const N: usize> DigitalInputDevice<N> {
     fn new() -> Self {
         Self { data: [0; N] }
     }

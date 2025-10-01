@@ -14,7 +14,13 @@ const PI2: f32 = PI / 2.0;
 const PLAYER_SPEED: f32 = 2000.0;
 
 fn spawn_camera(mut cmd: Commands) {
-    cmd.spawn((Camera3d::default(), Player));
+    let mut position = Vec3::default();
+    position.z = 50.0;
+    cmd.spawn((
+        Camera3d::default(),
+        Player,
+        Transform::from_translation(position),
+    ));
 }
 
 fn spawn_map(
@@ -23,16 +29,17 @@ fn spawn_map(
     mut material_assets: ResMut<Assets<StandardMaterial>>,
 ) {
     let ball_mesh = mesh_assets.add(Sphere::new(1.0));
-    for h in 0..16 {
-        let color = Color::hsl((h as f32 / 16.0) * 360.0, 1.0, 0.5);
+    for h in 0..6 {
+        let color = Color::hsl((h as f32 / 6.0) * 360.0, 1.0, 0.5);
         let ball_material = material_assets.add(StandardMaterial {
             base_color: color,
             ..Default::default()
         });
         let x = -8.0 + h as f32;
 
-        let transform = Transform::from_translation(Vec3::new(x, 0.0, -50.0));
+        let transform = Transform::from_translation(Vec3::new(x, 10.0, 0.0));
         cmd.spawn((
+            Name::new("DummyBall"),
             transform,
             Mesh3d(ball_mesh.clone()),
             MeshMaterial3d(ball_material),
@@ -62,8 +69,12 @@ fn player_look(
 fn player_move(
     mut player: Single<&mut Transform, With<Player>>,
     input: Res<ButtonInput<KeyCode>>,
+    window: Single<&Window, With<PrimaryWindow>>,
     time: Res<Time>,
 ) {
+    if !window.focused {
+        return;
+    }
     let dt = time.delta_secs();
     let mut delta = Vec3::ZERO;
     if input.pressed(KeyCode::KeyA) {
@@ -78,10 +89,20 @@ fn player_move(
     if input.pressed(KeyCode::KeyS) {
         delta.z -= 1.0;
     }
-    let forward = player.forward().as_vec3() * delta.z;
-    let right = player.right().as_vec3() * delta.x;
+    if input.pressed(KeyCode::Space) {
+        delta.y += 1.0;
+    }
+    if input.pressed(KeyCode::KeyC) {
+        delta.y -= 1.0;
+    }
+
+    let mut xz_direction = player.forward().as_vec3();
+    xz_direction.y = 0.0;
+    xz_direction = xz_direction.normalize();
+    let forward = xz_direction * delta.z;
+    let to_right = Quat::from_rotation_y(-90_f32.to_radians());
+    let right = (to_right * xz_direction) * delta.x;
     let mut to_move = forward + right;
-    to_move.y = 0.0;
     to_move = to_move.normalize_or_zero() * dt;
     player.translation += to_move * dt * PLAYER_SPEED;
 }
