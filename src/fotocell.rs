@@ -1,17 +1,18 @@
 use std::borrow::Cow;
 
 use bevy::{color::palettes::css, prelude::*};
+use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
 use crate::{
-    io::{Address, ConnectedTo, DeviceNetwork, IoSlot},
+    io::{ConnectedTo, IoSlot},
     sysorder::InitSet,
-    tbana::load_assets,
 };
 
 pub struct FotocellPlugin;
 
 impl Plugin for FotocellPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(PolylinePlugin);
         app.init_resource::<FotocellAssets>();
         app.add_systems(Startup, load_fotocell_assets.in_set(InitSet::LoadAssets));
     }
@@ -20,10 +21,10 @@ impl Plugin for FotocellPlugin {
 fn load_fotocell_assets(
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
+    mut polylines_materials: ResMut<Assets<PolylineMaterial>>,
     mut fotocell_assets: ResMut<FotocellAssets>,
 ) {
     fotocell_assets.emmiter = mesh_assets.add(Extrusion::new(Rectangle::new(0.02, 0.02), 0.14));
-    fotocell_assets.laser = mesh_assets.add(Extrusion::new(Circle::new(0.005), 1.0));
 
     fotocell_assets.foto_materials.emmiter = material_assets.add(StandardMaterial {
         base_color: css::HOT_PINK.into(),
@@ -33,14 +34,54 @@ fn load_fotocell_assets(
         base_color: css::LAVENDER.into(),
         ..Default::default()
     });
-    fotocell_assets.foto_materials.laser_normal = material_assets.add(StandardMaterial {
-        base_color: css::ORCHID.into(),
+    let width = 2.0;
+    fotocell_assets.foto_materials.laser_normal = polylines_materials.add(PolylineMaterial {
+        color: css::ORCHID.into(),
+        width,
+        perspective: false,
         ..Default::default()
     });
-    fotocell_assets.foto_materials.laser_triggerd = material_assets.add(StandardMaterial {
-        base_color: css::LIME.into(),
+    fotocell_assets.foto_materials.laser_triggerd = polylines_materials.add(PolylineMaterial {
+        color: css::LIME.into(),
+        width,
+        perspective: false,
         ..Default::default()
     });
+}
+
+#[derive(Component)]
+struct DetectorRay;
+
+#[derive(Bundle)]
+pub struct LaserBundle {
+    marker: DetectorRay,
+    pub poly: PolylineBundle,
+    pub name: Name,
+}
+
+impl LaserBundle {
+    pub fn new(target: Vec3, assets: &FotocellAssets, polylines: &mut Assets<Polyline>) -> Self {
+        let poly = polylines.add(Polyline {
+            vertices: vec![
+                Vec3 {
+                    z: 0.001,
+                    ..default()
+                },
+                target,
+            ],
+        });
+        let linematerial = PolylineMaterialHandle(assets.foto_materials.laser_normal.clone());
+        let poly = PolylineBundle {
+            polyline: PolylineHandle(poly),
+            material: linematerial,
+            ..default()
+        };
+        Self {
+            marker: DetectorRay,
+            poly,
+            name: Name::new("Fotocell Laser"),
+        }
+    }
 }
 
 // fn spawn_fotocell(cmd: &mut Commands, coord: Vec3, io_device: Address, slot: Slot) {}
@@ -79,14 +120,14 @@ impl FotocellBundle {
 struct FotoCellMaterials {
     emmiter: Handle<StandardMaterial>,
     reflector: Handle<StandardMaterial>,
-    laser_normal: Handle<StandardMaterial>,
-    laser_triggerd: Handle<StandardMaterial>,
+    laser_poly: Handle<Polyline>,
+    laser_normal: Handle<PolylineMaterial>,
+    laser_triggerd: Handle<PolylineMaterial>,
 }
 
 #[derive(Resource, Default)]
 pub struct FotocellAssets {
     emmiter: Handle<Mesh>,
-    laser: Handle<Mesh>,
     reflector: Handle<Mesh>,
     foto_materials: FotoCellMaterials,
 }

@@ -1,14 +1,18 @@
 use std::f32::consts::PI;
 
 use bevy::{
+    color::palettes::css,
     input::{common_conditions::input_just_released, mouse::AccumulatedMouseMotion},
     prelude::*,
     window::{CursorGrabMode, PrimaryWindow, WindowFocused},
 };
+use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_inspector_egui::{bevy_egui::EguiPlugin, prelude::*};
 
-use cybercrab::{DummyPlugin, TbanaPlugin};
+use bevy_polyline::prelude::{
+    Polyline, PolylineBundle, PolylineHandle, PolylineMaterial, PolylineMaterialHandle,
+};
+use cybercrab::{DummyPlugin, InitSet};
 
 const PI2: f32 = PI / 2.0;
 const PLAYER_SPEED: f32 = 1000.0;
@@ -20,6 +24,11 @@ fn spawn_camera(mut cmd: Commands) {
         Camera3d::default(),
         Player,
         Transform::from_translation(position),
+        Camera {
+            hdr: true,
+            ..Default::default()
+        },
+        Msaa::Sample4,
     ));
 }
 
@@ -172,7 +181,7 @@ fn main() {
     app.add_plugins(EguiPlugin::default());
     app.add_plugins(WorldInspectorPlugin::new());
 
-    app.add_systems(Startup, (spawn_camera, spawn_map));
+    app.add_systems(Startup, (spawn_camera, spawn_map).in_set(InitSet::Spawn));
     app.add_systems(Update, (player_look, player_move).chain());
     app.add_systems(
         Update,

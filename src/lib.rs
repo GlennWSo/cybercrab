@@ -5,15 +5,17 @@ pub mod io;
 pub mod shiftreg;
 mod sysorder;
 mod tbana;
+use bevy_polyline::prelude::Polyline;
+pub use sysorder::InitSet;
 pub use tbana::TbanaPlugin;
 
 use tbana::TbanaBundle;
 
 use crate::{
-    fotocell::{Fotocell, FotocellAssets, FotocellBundle, FotocellPlugin},
-    io::{Address, ConnectedTo, DeviceNetwork, IoPlugin, IoSlot},
-    sysorder::{InitSet, SysOrderPlugin},
-    tbana::{load_assets, PushTo, TBanaAssets},
+    fotocell::{FotocellAssets, FotocellBundle, FotocellPlugin, LaserBundle},
+    io::{Address, DeviceNetwork, IoPlugin, IoSlot},
+    sysorder::SysOrderPlugin,
+    tbana::{PushTo, TBanaAssets},
 };
 
 pub struct DummyPlugin;
@@ -31,6 +33,7 @@ impl Plugin for DummyPlugin {
 fn spawn_some_stuff(
     mut cmd: Commands,
     mut net: ResMut<DeviceNetwork>,
+    mut polylines: ResMut<Assets<Polyline>>,
     fotocell_assets: Res<FotocellAssets>,
     tbana_assets: Res<TBanaAssets>,
 ) {
@@ -57,7 +60,18 @@ fn spawn_some_stuff(
             let name = format!("fotocell_{i}");
             let io_slot = IoSlot::new(ptr, io::DataSlice::Bit(idx));
             let fotocell = FotocellBundle::new(name, io_slot, &fotocell_assets, device_id);
-            cmd.spawn((fotocell, transform)).id()
+            let laser = LaserBundle::new(
+                Vec3::with_z(
+                    Vec3 {
+                        z: 2.0,
+                        ..default()
+                    },
+                    z,
+                ),
+                &fotocell_assets,
+                &mut polylines,
+            );
+            cmd.spawn((fotocell, transform)).with_child(laser).id()
         })
         .collect();
 

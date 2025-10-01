@@ -83,10 +83,10 @@ impl TbanaBundle {
 }
 
 #[derive(Component)]
-struct TransportBana;
+pub struct TransportBana;
 
 #[derive(Reflect, Component, Default, Deref)]
-struct AutoMode {
+pub struct AutoMode {
     enabled: bool,
 }
 
