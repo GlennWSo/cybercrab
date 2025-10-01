@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use avian3d::prelude::*;
 use bevy::{color::palettes::css, prelude::*};
 use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
@@ -18,6 +19,18 @@ impl Plugin for FotocellPlugin {
     }
 }
 
+const LASER_VERTS: [Vec3; 2] = [
+    Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.15,
+    },
+    Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.7,
+    },
+];
 fn load_fotocell_assets(
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
@@ -25,9 +38,12 @@ fn load_fotocell_assets(
     mut polylines: ResMut<Assets<Polyline>>,
     mut fotocell_assets: ResMut<FotocellAssets>,
 ) {
-    fotocell_assets.emmiter = mesh_assets.add(Extrusion::new(Rectangle::new(0.02, 0.02), 0.14));
+    fotocell_assets.emmiter = mesh_assets.add(Extrusion::new(
+        Rectangle::new(0.02, 0.02),
+        LASER_VERTS[0].z - 0.01,
+    ));
     fotocell_assets.laser_poly = polylines.add(Polyline {
-        vertices: vec![Vec3::ZERO, Vec3::ZERO.with_z(0.5)],
+        vertices: LASER_VERTS.into(),
     });
     material_assets.add(StandardMaterial {
         base_color: css::HOT_PINK.into(),
@@ -60,6 +76,8 @@ pub struct LaserBundle {
     marker: DetectorRay,
     pub poly: PolylineBundle,
     pub name: Name,
+    simbody: RigidBody,
+    collider: Collider,
 }
 
 impl LaserBundle {
@@ -75,6 +93,8 @@ impl LaserBundle {
             marker: DetectorRay,
             poly,
             name: Name::new("Fotocell Laser"),
+            simbody: RigidBody::Static,
+            collider: Collider::polyline(LASER_VERTS.into(), None),
         }
     }
 }

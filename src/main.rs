@@ -1,5 +1,6 @@
 use std::f32::consts::PI;
 
+use avian3d::prelude::{Collider, CollidingEntities, RigidBody};
 use bevy::{
     color::palettes::css,
     input::{common_conditions::input_just_released, mouse::AccumulatedMouseMotion},
@@ -169,11 +170,21 @@ fn spawn_ball(
             Transform::from_translation(spawn.position),
             MeshMaterial3d(mat_handle),
             Mesh3d(mesh_handle),
+            RigidBody::Kinematic,
+            Collider::sphere(1.0),
+            CollidingEntities::default(),
         );
         cmd.spawn(bundle);
     }
 }
-
+fn debug_collide(query: Query<(Entity, &CollidingEntities)>) {
+    for (entity, colliding_entities) in &query {
+        println!(
+            "{} is colliding with the following entities: {:?}",
+            entity, colliding_entities,
+        );
+    }
+}
 fn main() {
     let mut app = App::new();
     app.add_plugins(DefaultPlugins);
@@ -182,7 +193,7 @@ fn main() {
     app.add_plugins(WorldInspectorPlugin::new());
 
     app.add_systems(Startup, (spawn_camera, spawn_map).in_set(InitSet::Spawn));
-    app.add_systems(Update, (player_look, player_move).chain());
+    app.add_systems(Update, (player_look, player_move, debug_collide).chain());
     app.add_systems(
         Update,
         (

@@ -5,6 +5,7 @@ pub mod io;
 pub mod shiftreg;
 mod sysorder;
 mod tbana;
+use avian3d::prelude::PhysicsPlugins;
 use bevy_polyline::prelude::Polyline;
 pub use sysorder::InitSet;
 pub use tbana::TbanaPlugin;
@@ -26,6 +27,7 @@ impl Plugin for DummyPlugin {
         app.add_plugins(IoPlugin);
         app.add_plugins(FotocellPlugin);
         app.add_plugins(SysOrderPlugin);
+        app.add_plugins(PhysicsPlugins::default());
         app.add_systems(Startup, spawn_some_stuff.in_set(InitSet::Spawn));
     }
 }
