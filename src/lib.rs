@@ -28,22 +28,28 @@ fn spawn_some_stuff(mut cmd: Commands, mut net: ResMut<DeviceNetwork>) {
     let device_address: Address = 1;
     let device_id = io::InputDevice::<2>::spawn(&mut cmd, &mut net, "inputmodule1", device_address);
 
-    for i in 1..=4 {
-        let fotocell = (
-            FotoCell,
-            Name::new(format!("fotocell{i}")),
-            ConnectedTo(device_id),
-            IoSlot::new(0, io::DataSlice::Bit(i)),
-        );
-        cmd.spawn(fotocell);
-    }
+    let fotocells: Vec<_> = (1..=12)
+        .map(|i| {
+            let ptr = i / 8;
+            let idx = i % 8;
+            let fotocell = (
+                FotoCell,
+                Name::new(format!("fotocell{i}")),
+                IoSlot::new(ptr, io::DataSlice::Bit(idx)),
+            );
+            cmd.spawn(fotocell).id()
+        })
+        .collect();
 
-    let n = 8;
+    cmd.entity(device_id).add_related::<ConnectedTo>(&fotocells);
+    let n = 3;
 
-    let last_bundle = TbanaBundle::new(format!("Stn: {}", n));
-    let mut id = cmd.spawn(last_bundle).id();
+    let last_bundle = TbanaBundle::new(format!("Stn: {}", n + 1));
+    let mut id = cmd.spawn(last_bundle).add_children(&fotocells[0..4]).id();
     for i in (1..n).rev() {
-        let bundle = (TbanaBundle::new(format!("Stn: {}", i)), PushTo(id));
-        id = cmd.spawn(bundle).id();
+        let bundle = (TbanaBundle::new(format!("Stn: {}", i + 1)), PushTo(id));
+        let foto_idx = i * 4;
+        let children = &fotocells[foto_idx..(foto_idx + 4)];
+        id = cmd.spawn(bundle).add_children(children).id();
     }
 }

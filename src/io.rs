@@ -5,6 +5,8 @@ pub struct IoPlugin;
 impl Plugin for IoPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<DeviceNetwork>();
+        app.register_type::<ConnectedTo>();
+        app.register_type::<AttachedThings>();
         app.init_resource::<DeviceNetwork>();
     }
 }
@@ -64,6 +66,7 @@ impl<const N: usize> InputDevice<N> {
     }
 }
 
+#[derive(Reflect)]
 pub enum DataSlice {
     Byte,
     Bit(u8),
@@ -78,16 +81,16 @@ pub struct ConnectedTo(pub Entity);
 #[relationship_target(relationship = ConnectedTo)]
 pub struct AttachedThings(Vec<Entity>);
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct IoSlot {
-    pub byte_idx: u8,
+    pub byte_ptr: u8,
     pub slice: DataSlice,
 }
 
 impl IoSlot {
-    pub fn new(address: u8, offset: DataSlice) -> Self {
+    pub fn new(ptr: u8, offset: DataSlice) -> Self {
         Self {
-            byte_idx: address,
+            byte_ptr: ptr,
             slice: offset,
         }
     }
