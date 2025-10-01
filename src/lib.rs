@@ -15,6 +15,7 @@ use tbana::TbanaBundle;
 use crate::{
     fotocell::{FotocellAssets, FotocellBundle, FotocellPlugin, LaserBundle},
     io::{Address, DeviceNetwork, IoPlugin, IoSlot},
+    shiftreg::{Detail, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
     tbana::{PushTo, TBanaAssets},
 };
@@ -27,6 +28,7 @@ impl Plugin for DummyPlugin {
         app.add_plugins(IoPlugin);
         app.add_plugins(FotocellPlugin);
         app.add_plugins(SysOrderPlugin);
+        app.add_plugins(ShiftRegPlugin);
         app.add_plugins(PhysicsPlugins::default());
         app.add_systems(Startup, spawn_some_stuff.in_set(InitSet::Spawn));
     }
@@ -38,6 +40,8 @@ fn spawn_some_stuff(
     fotocell_assets: Res<FotocellAssets>,
     tbana_assets: Res<TBanaAssets>,
 ) {
+    let detail = (Detail,);
+
     let device_address: Address = 1;
     const SIZE: usize = 4;
     // spawn input node with SIZE*8 bits
