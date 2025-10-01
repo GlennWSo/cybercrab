@@ -16,7 +16,7 @@ pub type Address = u32;
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]
 pub struct DeviceNetwork {
-    address_map: HashMap<Address, Entity>,
+    pub address_map: HashMap<Address, Entity>,
 }
 
 pub trait ViewData {
@@ -102,6 +102,3 @@ pub struct IoThing {
     pub io_device: ConnectedTo,
     pub slot: IoSlot,
 }
-
-#[derive(Component)]
-pub struct FotoCell;

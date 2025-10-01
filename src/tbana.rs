@@ -24,7 +24,7 @@ pub fn load_assets(
     mut material_assets: ResMut<Assets<StandardMaterial>>,
     mut tbana_res: ResMut<TBanaAssets>,
 ) {
-    let block_mesh = mesh_assets.add(Extrusion::new(Rectangle::default(), 5.0));
+    let block_mesh = mesh_assets.add(Extrusion::new(Rectangle::default(), 2.0));
     let ready_mode = material_assets.add(StandardMaterial {
         base_color: css::CORNSILK.into(),
         ..Default::default()

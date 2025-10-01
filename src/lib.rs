@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+pub mod fotocell;
 pub mod io;
 pub mod shiftreg;
 mod tbana;
@@ -8,9 +9,8 @@ pub use tbana::TbanaPlugin;
 use tbana::TbanaBundle;
 
 use crate::{
-    io::{
-        Address, AttachedThings, ConnectedTo, DeviceNetwork, FotoCell, IoPlugin, IoSlot, IoThing,
-    },
+    fotocell::{Fotocell, FotocellAssets, FotocellBundle, FotocellPlugin},
+    io::{Address, ConnectedTo, DeviceNetwork, IoPlugin, IoSlot},
     tbana::{load_assets, PushTo, TBanaAssets},
 };
 
@@ -20,6 +20,7 @@ impl Plugin for DummyPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(TbanaPlugin);
         app.add_plugins(IoPlugin);
+        app.add_plugins(FotocellPlugin);
         app.add_systems(Startup, spawn_some_stuff.after(load_assets));
     }
 }
@@ -27,6 +28,7 @@ impl Plugin for DummyPlugin {
 fn spawn_some_stuff(
     mut cmd: Commands,
     mut net: ResMut<DeviceNetwork>,
+    fotocell_assets: Res<FotocellAssets>,
     tbana_assets: Res<TBanaAssets>,
 ) {
     let device_address: Address = 1;
@@ -39,16 +41,20 @@ fn spawn_some_stuff(
         .map(|i| {
             let ptr = i / 8;
             let idx = i % 8;
-            let fotocell = (
-                FotoCell,
-                Name::new(format!("fotocell{i}")),
-                IoSlot::new(ptr, io::DataSlice::Bit(idx)),
-            );
-            cmd.spawn(fotocell).id()
+
+            let z = (i % 2) as f32 * 0.2 - 0.1 + ((i % 4) / 2) as f32 * 1.6 - 0.8;
+            let coord = Vec3 { x: 0.5, y: 0.6, z };
+            let mut transform = Transform::from_translation(coord);
+            transform.rotate_local_y(90_f32.to_radians());
+
+            let name = format!("fotocell_{i}");
+            let io_slot = IoSlot::new(ptr, io::DataSlice::Bit(idx));
+            let fotocell = FotocellBundle::new(name, io_slot, &fotocell_assets, device_id);
+            cmd.spawn((fotocell, transform)).id()
         })
         .collect();
 
-    cmd.entity(device_id).add_related::<ConnectedTo>(&fotocells);
+    // cmd.entity(device_id).add_related::<ConnectedTo>(&fotocells);
     let n = 3;
 
     let mut translation = Vec3::default();
@@ -58,7 +64,7 @@ fn spawn_some_stuff(
         .add_children(&fotocells[0..4])
         .id();
 
-    let spaceing = 5.3;
+    let spaceing = 2.1;
     for i in (1..n).rev() {
         translation.z += spaceing;
         let bundle = (
