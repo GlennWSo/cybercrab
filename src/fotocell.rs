@@ -1,11 +1,16 @@
 use std::borrow::Cow;
 
 use avian3d::prelude::*;
-use bevy::{color::palettes::css, prelude::*};
+use bevy::{
+    color::palettes::css,
+    ecs::{component::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
+use bitvec::vec::BitVec;
 
 use crate::{
-    io::{ConnectedTo, IoSlot},
+    io::{ConnectedTo, DIOPin, IoDevices, NetAddress, Switch},
     sysorder::InitSet,
 };
 
@@ -73,34 +78,66 @@ pub struct DetectorRay;
 
 #[derive(Bundle)]
 pub struct LaserBundle {
-    marker: DetectorRay,
     pub poly: PolylineBundle,
     pub name: Name,
-    simbody: RigidBody,
-    collider: Collider,
-    collision_marker: CollisionEventsEnabled,
 }
 
-pub fn laser_blocked(
+pub fn on_fotocell_blocked(
     trigger: Trigger<OnCollisionStart>,
-    mut laserq: Query<&mut PolylineMaterialHandle, With<DetectorRay>>,
-    assets: Res<FotocellAssets>,
+    query: Query<(&Children, &ConnectedTo, &DIOPin)>,
+    mut io: ResMut<IoDevices>,
+    mut cmd: Commands,
 ) {
-    let Ok(mut derp) = laserq.get_mut(trigger.target()) else {
+    let Ok((children, connection, pin)) = query.get(trigger.target()) else {
         return;
     };
-    *derp = PolylineMaterialHandle(assets.foto_materials.laser_triggerd.clone());
+    for child in children {
+        cmd.entity(*child).trigger(SetButtonColor::Pressed);
+    }
+    let Some(data) = io.input.get_mut(&connection.0) else {
+        println!("no such address:{}", connection.0);
+        return;
+    };
+    data.as_mut_bitslice().set(**pin as usize, true);
+    println!("yay");
+}
+pub fn on_fotocell_unblocked(
+    trigger: Trigger<OnCollisionStart>,
+    query: Query<(&Children, &ConnectedTo, &DIOPin)>,
+    mut io: ResMut<IoDevices>,
+    mut cmd: Commands,
+) {
+    let Ok((children, connection, pin)) = query.get(trigger.target()) else {
+        return;
+    };
+    for child in children {
+        cmd.entity(*child).trigger(SetButtonColor::Released);
+    }
+    let Some(data) = io.input.get_mut(&connection.0) else {
+        println!("no such address:{}", connection.0);
+        return;
+    };
+    data.as_mut_bitslice().set(**pin as usize, false);
 }
 
-pub fn laser_unblocked(
-    trigger: Trigger<OnCollisionEnd>,
-    mut laserq: Query<&mut PolylineMaterialHandle, With<DetectorRay>>,
+pub fn on_laser_color(
+    trigger: Trigger<SetButtonColor>,
+    mut qlaser: Query<&mut PolylineMaterialHandle>,
     assets: Res<FotocellAssets>,
 ) {
-    let Ok(mut derp) = laserq.get_mut(trigger.target()) else {
+    let Ok(mut material) = qlaser.get_mut(trigger.target()) else {
         return;
     };
-    *derp = PolylineMaterialHandle(assets.foto_materials.laser_normal.clone());
+    match trigger.event() {
+        SetButtonColor::Pressed => material.0 = assets.foto_materials.laser_triggerd.clone(),
+        SetButtonColor::Released => material.0 = assets.foto_materials.laser_normal.clone(),
+    }
+}
+
+#[derive(Event)]
+pub enum SetButtonColor {
+    Pressed,
+    Released,
 }
 
 impl LaserBundle {
@@ -113,12 +150,8 @@ impl LaserBundle {
             ..default()
         };
         Self {
-            marker: DetectorRay,
             poly,
             name: Name::new("Fotocell Laser"),
-            simbody: RigidBody::Static,
-            collider: Collider::polyline(LASER_VERTS.into(), None),
-            collision_marker: CollisionEventsEnabled,
         }
     }
 }
@@ -126,28 +159,44 @@ impl LaserBundle {
 // fn spawn_fotocell(cmd: &mut Commands, coord: Vec3, io_device: Address, slot: Slot) {}
 #[derive(Bundle)]
 pub struct FotocellBundle {
-    pub marker: Fotocell,
+    pub fotocell_mark: Fotocell,
+    pub switch: Switch,
     pub name: Name,
-    pub io_slot: IoSlot,
     pub device: ConnectedTo,
+    pub io_pin: DIOPin,
     pub mesh: Mesh3d,
-    pub material: MeshMaterial3d<StandardMaterial>,
+    material: MeshMaterial3d<StandardMaterial>,
+    simbody: RigidBody,
+    collider: Collider,
+    collision_marker: CollisionEventsEnabled,
 }
 
 impl FotocellBundle {
     pub fn new(
         name: impl Into<Cow<'static, str>>,
-        io_slot: IoSlot,
+        io_slot: DIOPin,
         fotocell_assets: &FotocellAssets,
-        io_device: Entity,
+        io_device: NetAddress,
+        range: f32,
     ) -> Self {
+        let collider = Collider::segment(
+            Vec3::ZERO,
+            Vec3 {
+                z: range,
+                ..default()
+            },
+        );
         Self {
-            marker: Fotocell,
+            fotocell_mark: Fotocell,
             name: Name::new(name),
-            io_slot,
+            io_pin: io_slot,
             device: ConnectedTo(io_device),
             mesh: Mesh3d(fotocell_assets.emmiter.clone()),
             material: MeshMaterial3d(fotocell_assets.foto_materials.emmiter.clone()),
+            switch: default(),
+            simbody: RigidBody::Kinematic,
+            collision_marker: CollisionEventsEnabled,
+            collider,
         }
     }
     pub fn with_translation(self, translation: Vec3) -> (Self, Transform) {

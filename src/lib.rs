@@ -6,7 +6,6 @@ pub mod shiftreg;
 mod sysorder;
 mod tbana;
 use avian3d::prelude::PhysicsPlugins;
-use bevy_polyline::prelude::Polyline;
 pub use sysorder::InitSet;
 pub use tbana::TbanaPlugin;
 
@@ -14,14 +13,16 @@ use tbana::TbanaBundle;
 
 use crate::{
     fotocell::{
-        laser_blocked, laser_unblocked, FotocellAssets, FotocellBundle, FotocellPlugin, LaserBundle,
+        on_fotocell_blocked, on_laser_color, FotocellAssets, FotocellBundle, FotocellPlugin,
+        LaserBundle,
     },
-    io::{Address, DeviceNetwork, IoPlugin, IoSlot},
+    io::{DIOPin, DeviceNetwork, IoDevices, IoPlugin, NetAddress},
     shiftreg::{Detail, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
     tbana::{PushTo, TBanaAssets},
 };
 
+use bitvec::prelude::*;
 pub struct DummyPlugin;
 
 impl Plugin for DummyPlugin {
@@ -38,21 +39,15 @@ impl Plugin for DummyPlugin {
 
 fn spawn_some_stuff(
     mut cmd: Commands,
-    mut net: ResMut<DeviceNetwork>,
     fotocell_assets: Res<FotocellAssets>,
     tbana_assets: Res<TBanaAssets>,
+    mut io: ResMut<IoDevices>,
 ) {
-    let device_address: Address = 1;
-    const SIZE: usize = 4;
-    // spawn input node with SIZE*8 bits
-    let device_id =
-        io::DigitalInputDevice::<SIZE>::spawn(&mut cmd, &mut net, "inputmodule1", device_address);
+    let device_address: NetAddress = 0;
+    io.input.insert(device_address, bitvec![u32, Lsb0; 0; 32]);
 
     let fotocells: Vec<_> = (1..=12)
         .map(|i| {
-            let ptr = i / 8;
-            let idx = i % 8;
-
             let z = (i % 2) as f32 * 0.2 - 0.1 + ((i % 4) / 2) as f32 * 1.6 - 0.8;
             let coord = Vec3 {
                 x: 0.45,
@@ -63,15 +58,15 @@ fn spawn_some_stuff(
             transform.rotate_local_y(-90_f32.to_radians());
 
             let name = format!("fotocell_{i}");
-            let io_slot = IoSlot::new(ptr, io::DataSlice::Bit(idx));
-            let fotocell = FotocellBundle::new(name, io_slot, &fotocell_assets, device_id);
+            let io_slot = DIOPin(i - 1);
+            let fotocell =
+                FotocellBundle::new(name, io_slot, &fotocell_assets, device_address, 0.8);
             let laser = LaserBundle::new(&fotocell_assets);
-            let laser = cmd
-                .spawn(laser)
-                .observe(laser_blocked)
-                .observe(laser_unblocked)
+            let laser = cmd.spawn(laser).observe(on_laser_color).id();
+            let fotocell = cmd
+                .spawn((fotocell, transform))
+                .observe(on_fotocell_blocked)
                 .id();
-            let fotocell = cmd.spawn((fotocell, transform)).id();
             cmd.entity(fotocell).add_child(laser);
             fotocell
         })
