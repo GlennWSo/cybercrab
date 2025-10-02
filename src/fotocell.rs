@@ -1,11 +1,15 @@
 use std::borrow::Cow;
 
 use avian3d::prelude::*;
-use bevy::{color::palettes::css, prelude::*};
+use bevy::{
+    color::palettes::css,
+    ecs::{component::HookContext, world::DeferredWorld},
+    prelude::*,
+};
 use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
 use crate::{
-    io::{ConnectedTo, ISwitch, IoSlot, SwitchEvent},
+    io::{ConnectedTo, DIOPin, NetAddress, Switch},
     sysorder::InitSet,
 };
 
@@ -73,38 +77,55 @@ pub struct DetectorRay;
 
 #[derive(Bundle)]
 pub struct LaserBundle {
-    marker: DetectorRay,
     pub poly: PolylineBundle,
     pub name: Name,
-    simbody: RigidBody,
-    collider: Collider,
-    collision_marker: CollisionEventsEnabled,
 }
 
-pub fn close_color_on(
+pub fn on_fotocell_blocked(
     trigger: Trigger<OnCollisionStart>,
-    mut laserq: Query<(&mut PolylineMaterialHandle, &ChildOf), With<DetectorRay>>,
+    mut query: Query<(&mut Switch, &Children)>,
     mut cmd: Commands,
-    assets: Res<FotocellAssets>,
 ) {
-    let Ok((mut laser, sensor)) = laserq.get_mut(trigger.target()) else {
+    let Ok((mut switch, children)) = query.get_mut(trigger.target()) else {
         return;
     };
-    *laser = PolylineMaterialHandle(assets.foto_materials.laser_triggerd.clone());
-    cmd.entity(sensor.0).trigger(SwitchEvent::Closed);
+    **switch = true;
+    for child in children {
+        cmd.entity(*child).trigger(SetButtonColor::Pressed);
+    }
+}
+pub fn on_fotocell_unblocked(
+    trigger: Trigger<OnCollisionStart>,
+    mut query: Query<(&mut Switch, &Children)>,
+    mut cmd: Commands,
+) {
+    let Ok((mut switch, children)) = query.get_mut(trigger.target()) else {
+        return;
+    };
+    **switch = false;
+    for child in children {
+        cmd.entity(*child).trigger(SetButtonColor::Released);
+    }
 }
 
-pub fn open_color_on(
-    trigger: Trigger<OnCollisionEnd>,
-    mut laserq: Query<(&mut PolylineMaterialHandle, &ChildOf), With<DetectorRay>>,
-    mut cmd: Commands,
+pub fn on_laser_color(
+    trigger: Trigger<SetButtonColor>,
+    mut qlaser: Query<&mut PolylineMaterialHandle>,
     assets: Res<FotocellAssets>,
 ) {
-    let Ok((mut laser, sensor)) = laserq.get_mut(trigger.target()) else {
+    let Ok(mut material) = qlaser.get_mut(trigger.target()) else {
         return;
     };
-    *laser = PolylineMaterialHandle(assets.foto_materials.laser_normal.clone());
-    cmd.entity(sensor.0).trigger(SwitchEvent::Opened);
+    match trigger.event() {
+        SetButtonColor::Pressed => material.0 = assets.foto_materials.laser_triggerd.clone(),
+        SetButtonColor::Released => material.0 = assets.foto_materials.laser_normal.clone(),
+    }
+}
+
+#[derive(Event)]
+pub enum SetButtonColor {
+    Pressed,
+    Released,
 }
 
 impl LaserBundle {
@@ -117,12 +138,8 @@ impl LaserBundle {
             ..default()
         };
         Self {
-            marker: DetectorRay,
             poly,
             name: Name::new("Fotocell Laser"),
-            simbody: RigidBody::Static,
-            collider: Collider::polyline(LASER_VERTS.into(), None),
-            collision_marker: CollisionEventsEnabled,
         }
     }
 }
@@ -130,30 +147,44 @@ impl LaserBundle {
 // fn spawn_fotocell(cmd: &mut Commands, coord: Vec3, io_device: Address, slot: Slot) {}
 #[derive(Bundle)]
 pub struct FotocellBundle {
-    pub marker: Fotocell,
+    pub fotocell_mark: Fotocell,
+    pub switch: Switch,
     pub name: Name,
-    pub io_slot: IoSlot,
     pub device: ConnectedTo,
+    pub io_pin: DIOPin,
     pub mesh: Mesh3d,
-    pub material: MeshMaterial3d<StandardMaterial>,
-    pub switch: ISwitch,
+    material: MeshMaterial3d<StandardMaterial>,
+    simbody: RigidBody,
+    collider: Collider,
+    collision_marker: CollisionEventsEnabled,
 }
 
 impl FotocellBundle {
     pub fn new(
         name: impl Into<Cow<'static, str>>,
-        io_slot: IoSlot,
+        io_slot: DIOPin,
         fotocell_assets: &FotocellAssets,
-        io_device: Entity,
+        io_device: NetAddress,
+        range: f32,
     ) -> Self {
+        let collider = Collider::segment(
+            Vec3::ZERO,
+            Vec3 {
+                z: range,
+                ..default()
+            },
+        );
         Self {
-            marker: Fotocell,
+            fotocell_mark: Fotocell,
             name: Name::new(name),
-            io_slot,
+            io_pin: io_slot,
             device: ConnectedTo(io_device),
             mesh: Mesh3d(fotocell_assets.emmiter.clone()),
             material: MeshMaterial3d(fotocell_assets.foto_materials.emmiter.clone()),
-            switch: ISwitch::default(),
+            switch: default(),
+            simbody: RigidBody::Kinematic,
+            collision_marker: CollisionEventsEnabled,
+            collider,
         }
     }
     pub fn with_translation(self, translation: Vec3) -> (Self, Transform) {

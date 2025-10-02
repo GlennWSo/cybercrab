@@ -1,4 +1,6 @@
+use avian3d::data_structures::bit_vec::BitVec;
 use bevy::{platform::collections::HashMap, prelude::*};
+// use bitvec::vec::BitVec;
 
 pub struct IoPlugin;
 
@@ -6,73 +8,37 @@ impl Plugin for IoPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<DeviceNetwork>();
         app.register_type::<ConnectedTo>();
-        app.register_type::<AttachedThings>();
         app.init_resource::<DeviceNetwork>();
     }
 }
 
-pub fn on_switch_set_bit(
-    trigger: Trigger<SwitchEvent>,
-    qswitch: Query<(&ConnectedTo, &IoSlot)>,
-    mut qio: Query<&mut DigitalInputDevice<4>>,
-) {
-    let Ok((parent, slot)) = qswitch.get(trigger.target()) else {
-        return;
-    };
-    let IoSlot { byte_ptr, slice } = slot;
-    let DataSlice::Bit(bit) = *slice else {
-        return;
-    };
-}
-
-pub type Address = u32;
+pub type NetAddress = u32;
 
 #[derive(Resource, Default, Reflect)]
 #[reflect(Resource)]
 pub struct DeviceNetwork {
-    pub address_map: HashMap<Address, Entity>,
+    pub address_map: HashMap<NetAddress, Entity>,
 }
 
-pub trait ViewData {
-    fn view_all(&self) -> &[u8];
-    fn view_input(&self) -> &[u8] {
-        self.view_all()
-    }
-    fn view_bit(&self, address: u8, idx: u8) -> bool {
-        let mask: u8 = 1 << idx;
-        let hit = mask & self.view_all()[address as usize];
-        hit > 0
-    }
-    fn view_input_bit(&self, address: u8, idx: u8) -> bool {
-        let mask: u8 = 1 << idx;
-        let hit = mask & self.view_input()[address as usize];
-        hit > 0
-    }
+#[derive(Resource, Default)]
+pub struct IODevices {
+    pub input: HashMap<NetAddress, BitVec>,
 }
-
-trait GetOutput {}
 
 #[derive(Component, Reflect)]
-/// input device with NB bytes of IO inputs
-pub struct DigitalInputDevice<const NB: usize> {
-    data: [u8; NB],
+pub struct DIOModule<const S: usize> {
+    data: [bool; S],
 }
 
-impl<const N: usize> ViewData for DigitalInputDevice<N> {
-    fn view_all(&self) -> &[u8] {
-        &self.data
-    }
-}
-
-impl<const N: usize> DigitalInputDevice<N> {
+impl<const N: usize> DIOModule<N> {
     fn new() -> Self {
-        Self { data: [0; N] }
+        Self { data: [false; N] }
     }
     pub fn spawn(
         cmd: &mut Commands,
         net: &mut DeviceNetwork,
         name: &'static str,
-        address: Address,
+        address: NetAddress,
     ) -> Entity {
         let new_device = Self::new();
         let id = cmd.spawn((new_device, Name::new(name))).id();
@@ -81,47 +47,17 @@ impl<const N: usize> DigitalInputDevice<N> {
     }
 }
 
-#[derive(Reflect, Clone, Copy)]
-pub enum DataSlice {
-    Byte,
-    Bit(u8),
-    Slice(u8),
-}
-
 #[derive(Component, Reflect)]
-#[relationship(relationship_target=AttachedThings)]
-pub struct ConnectedTo(pub Entity);
+pub struct ConnectedTo(pub NetAddress);
 
-#[derive(Component, Reflect)]
-#[relationship_target(relationship = ConnectedTo)]
-pub struct AttachedThings(Vec<Entity>);
-
-#[derive(Component, Reflect, Clone, Copy)]
-pub struct IoSlot {
-    pub byte_ptr: u8,
-    pub slice: DataSlice,
-}
-
-impl IoSlot {
-    pub fn new(ptr: u8, offset: DataSlice) -> Self {
-        Self {
-            byte_ptr: ptr,
-            slice: offset,
-        }
-    }
-}
+#[derive(Component, Reflect, Clone, Copy, Deref, DerefMut)]
+pub struct DIOPin(pub u16);
 
 #[derive(Bundle)]
 pub struct IoThing {
     pub io_device: ConnectedTo,
-    pub slot: IoSlot,
+    pub pin: DIOPin,
 }
 
-#[derive(Event)]
-pub enum SwitchEvent {
-    Closed,
-    Opened,
-}
-
-#[derive(Component, Default)]
-pub struct ISwitch;
+#[derive(Component, Default, Reflect, Deref, DerefMut)]
+pub struct Switch(pub bool);

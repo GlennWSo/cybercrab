@@ -14,9 +14,10 @@ use tbana::TbanaBundle;
 
 use crate::{
     fotocell::{
-        close_color_on, open_color_on, FotocellAssets, FotocellBundle, FotocellPlugin, LaserBundle,
+        on_fotocell_blocked, on_laser_color, FotocellAssets, FotocellBundle, FotocellPlugin,
+        LaserBundle,
     },
-    io::{Address, DeviceNetwork, IoPlugin, IoSlot},
+    io::{DIOPin, DeviceNetwork, IoPlugin, NetAddress},
     shiftreg::{Detail, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
     tbana::{PushTo, TBanaAssets},
@@ -42,11 +43,11 @@ fn spawn_some_stuff(
     fotocell_assets: Res<FotocellAssets>,
     tbana_assets: Res<TBanaAssets>,
 ) {
-    let device_address: Address = 1;
+    let device_address: NetAddress = 1;
     const SIZE: usize = 4;
     // spawn input node with SIZE*8 bits
     let device_id =
-        io::DigitalInputDevice::<SIZE>::spawn(&mut cmd, &mut net, "inputmodule1", device_address);
+        io::DIOModule::<SIZE>::spawn(&mut cmd, &mut net, "inputmodule1", device_address);
 
     let fotocells: Vec<_> = (1..=12)
         .map(|i| {
@@ -63,15 +64,15 @@ fn spawn_some_stuff(
             transform.rotate_local_y(-90_f32.to_radians());
 
             let name = format!("fotocell_{i}");
-            let io_slot = IoSlot::new(ptr, io::DataSlice::Bit(idx));
-            let fotocell = FotocellBundle::new(name, io_slot, &fotocell_assets, device_id);
+            let io_slot = DIOPin(i - 1);
+            let fotocell =
+                FotocellBundle::new(name, io_slot, &fotocell_assets, device_address, 0.8);
             let laser = LaserBundle::new(&fotocell_assets);
-            let laser = cmd
-                .spawn(laser)
-                .observe(close_color_on)
-                .observe(open_color_on)
+            let laser = cmd.spawn(laser).observe(on_laser_color).id();
+            let fotocell = cmd
+                .spawn((fotocell, transform))
+                .observe(on_fotocell_blocked)
                 .id();
-            let fotocell = cmd.spawn((fotocell, transform)).id();
             cmd.entity(fotocell).add_child(laser);
             fotocell
         })
