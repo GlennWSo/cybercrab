@@ -7,9 +7,10 @@ use bevy::{
     prelude::*,
 };
 use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
+use bitvec::vec::BitVec;
 
 use crate::{
-    io::{ConnectedTo, DIOPin, NetAddress, Switch},
+    io::{ConnectedTo, DIOPin, IoDevices, NetAddress, Switch},
     sysorder::InitSet,
 };
 
@@ -83,29 +84,40 @@ pub struct LaserBundle {
 
 pub fn on_fotocell_blocked(
     trigger: Trigger<OnCollisionStart>,
-    mut query: Query<(&mut Switch, &Children)>,
+    query: Query<(&Children, &ConnectedTo, &DIOPin)>,
+    mut io: ResMut<IoDevices>,
     mut cmd: Commands,
 ) {
-    let Ok((mut switch, children)) = query.get_mut(trigger.target()) else {
+    let Ok((children, connection, pin)) = query.get(trigger.target()) else {
         return;
     };
-    **switch = true;
     for child in children {
         cmd.entity(*child).trigger(SetButtonColor::Pressed);
     }
+    let Some(data) = io.input.get_mut(&connection.0) else {
+        println!("no such address:{}", connection.0);
+        return;
+    };
+    data.as_mut_bitslice().set(**pin as usize, true);
+    println!("yay");
 }
 pub fn on_fotocell_unblocked(
     trigger: Trigger<OnCollisionStart>,
-    mut query: Query<(&mut Switch, &Children)>,
+    query: Query<(&Children, &ConnectedTo, &DIOPin)>,
+    mut io: ResMut<IoDevices>,
     mut cmd: Commands,
 ) {
-    let Ok((mut switch, children)) = query.get_mut(trigger.target()) else {
+    let Ok((children, connection, pin)) = query.get(trigger.target()) else {
         return;
     };
-    **switch = false;
     for child in children {
         cmd.entity(*child).trigger(SetButtonColor::Released);
     }
+    let Some(data) = io.input.get_mut(&connection.0) else {
+        println!("no such address:{}", connection.0);
+        return;
+    };
+    data.as_mut_bitslice().set(**pin as usize, false);
 }
 
 pub fn on_laser_color(

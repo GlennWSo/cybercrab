@@ -1,5 +1,6 @@
-use avian3d::data_structures::bit_vec::BitVec;
+// use avian3d::data_structures::bit_vec::BitVec;
 use bevy::{platform::collections::HashMap, prelude::*};
+use bitvec::vec::BitVec;
 // use bitvec::vec::BitVec;
 
 pub struct IoPlugin;
@@ -9,6 +10,7 @@ impl Plugin for IoPlugin {
         app.register_type::<DeviceNetwork>();
         app.register_type::<ConnectedTo>();
         app.init_resource::<DeviceNetwork>();
+        app.init_resource::<IoDevices>();
     }
 }
 
@@ -21,8 +23,8 @@ pub struct DeviceNetwork {
 }
 
 #[derive(Resource, Default)]
-pub struct IODevices {
-    pub input: HashMap<NetAddress, BitVec>,
+pub struct IoDevices {
+    pub input: HashMap<NetAddress, BitVec<u32>>,
 }
 
 #[derive(Component, Reflect)]

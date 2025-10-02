@@ -6,7 +6,6 @@ pub mod shiftreg;
 mod sysorder;
 mod tbana;
 use avian3d::prelude::PhysicsPlugins;
-use bevy_polyline::prelude::Polyline;
 pub use sysorder::InitSet;
 pub use tbana::TbanaPlugin;
 
@@ -17,12 +16,13 @@ use crate::{
         on_fotocell_blocked, on_laser_color, FotocellAssets, FotocellBundle, FotocellPlugin,
         LaserBundle,
     },
-    io::{DIOPin, DeviceNetwork, IoPlugin, NetAddress},
+    io::{DIOPin, DeviceNetwork, IoDevices, IoPlugin, NetAddress},
     shiftreg::{Detail, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
     tbana::{PushTo, TBanaAssets},
 };
 
+use bitvec::prelude::*;
 pub struct DummyPlugin;
 
 impl Plugin for DummyPlugin {
@@ -39,21 +39,15 @@ impl Plugin for DummyPlugin {
 
 fn spawn_some_stuff(
     mut cmd: Commands,
-    mut net: ResMut<DeviceNetwork>,
     fotocell_assets: Res<FotocellAssets>,
     tbana_assets: Res<TBanaAssets>,
+    mut io: ResMut<IoDevices>,
 ) {
-    let device_address: NetAddress = 1;
-    const SIZE: usize = 4;
-    // spawn input node with SIZE*8 bits
-    let device_id =
-        io::DIOModule::<SIZE>::spawn(&mut cmd, &mut net, "inputmodule1", device_address);
+    let device_address: NetAddress = 0;
+    io.input.insert(device_address, bitvec![u32, Lsb0; 0; 32]);
 
     let fotocells: Vec<_> = (1..=12)
         .map(|i| {
-            let ptr = i / 8;
-            let idx = i % 8;
-
             let z = (i % 2) as f32 * 0.2 - 0.1 + ((i % 4) / 2) as f32 * 1.6 - 0.8;
             let coord = Vec3 {
                 x: 0.45,
