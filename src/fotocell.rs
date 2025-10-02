@@ -69,7 +69,7 @@ fn load_fotocell_assets(
 }
 
 #[derive(Component)]
-struct DetectorRay;
+pub struct DetectorRay;
 
 #[derive(Bundle)]
 pub struct LaserBundle {
@@ -78,6 +78,29 @@ pub struct LaserBundle {
     pub name: Name,
     simbody: RigidBody,
     collider: Collider,
+    collision_marker: CollisionEventsEnabled,
+}
+
+pub fn laser_blocked(
+    trigger: Trigger<OnCollisionStart>,
+    mut laserq: Query<&mut PolylineMaterialHandle, With<DetectorRay>>,
+    assets: Res<FotocellAssets>,
+) {
+    let Ok(mut derp) = laserq.get_mut(trigger.target()) else {
+        return;
+    };
+    *derp = PolylineMaterialHandle(assets.foto_materials.laser_triggerd.clone());
+}
+
+pub fn laser_unblocked(
+    trigger: Trigger<OnCollisionEnd>,
+    mut laserq: Query<&mut PolylineMaterialHandle, With<DetectorRay>>,
+    assets: Res<FotocellAssets>,
+) {
+    let Ok(mut derp) = laserq.get_mut(trigger.target()) else {
+        return;
+    };
+    *derp = PolylineMaterialHandle(assets.foto_materials.laser_normal.clone());
 }
 
 impl LaserBundle {
@@ -95,6 +118,7 @@ impl LaserBundle {
             name: Name::new("Fotocell Laser"),
             simbody: RigidBody::Static,
             collider: Collider::polyline(LASER_VERTS.into(), None),
+            collision_marker: CollisionEventsEnabled,
         }
     }
 }

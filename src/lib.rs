@@ -13,7 +13,9 @@ pub use tbana::TbanaPlugin;
 use tbana::TbanaBundle;
 
 use crate::{
-    fotocell::{FotocellAssets, FotocellBundle, FotocellPlugin, LaserBundle},
+    fotocell::{
+        laser_blocked, laser_unblocked, FotocellAssets, FotocellBundle, FotocellPlugin, LaserBundle,
+    },
     io::{Address, DeviceNetwork, IoPlugin, IoSlot},
     shiftreg::{Detail, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
@@ -64,7 +66,14 @@ fn spawn_some_stuff(
             let io_slot = IoSlot::new(ptr, io::DataSlice::Bit(idx));
             let fotocell = FotocellBundle::new(name, io_slot, &fotocell_assets, device_id);
             let laser = LaserBundle::new(&fotocell_assets);
-            cmd.spawn((fotocell, transform)).with_child(laser).id()
+            let laser = cmd
+                .spawn(laser)
+                .observe(laser_blocked)
+                .observe(laser_unblocked)
+                .id();
+            let fotocell = cmd.spawn((fotocell, transform)).id();
+            cmd.entity(fotocell).add_child(laser);
+            fotocell
         })
         .collect();
 
