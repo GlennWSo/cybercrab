@@ -14,7 +14,7 @@ use tbana::TbanaBundle;
 
 use crate::{
     fotocell::{
-        laser_blocked, laser_unblocked, FotocellAssets, FotocellBundle, FotocellPlugin, LaserBundle,
+        close_color_on, open_color_on, FotocellAssets, FotocellBundle, FotocellPlugin, LaserBundle,
     },
     io::{Address, DeviceNetwork, IoPlugin, IoSlot},
     shiftreg::{Detail, ShiftRegPlugin},
@@ -68,8 +68,8 @@ fn spawn_some_stuff(
             let laser = LaserBundle::new(&fotocell_assets);
             let laser = cmd
                 .spawn(laser)
-                .observe(laser_blocked)
-                .observe(laser_unblocked)
+                .observe(close_color_on)
+                .observe(open_color_on)
                 .id();
             let fotocell = cmd.spawn((fotocell, transform)).id();
             cmd.entity(fotocell).add_child(laser);

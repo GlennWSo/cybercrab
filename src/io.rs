@@ -11,6 +11,20 @@ impl Plugin for IoPlugin {
     }
 }
 
+pub fn on_switch_set_bit(
+    trigger: Trigger<SwitchEvent>,
+    qswitch: Query<(&ConnectedTo, &IoSlot)>,
+    mut qio: Query<&mut DigitalInputDevice<4>>,
+) {
+    let Ok((parent, slot)) = qswitch.get(trigger.target()) else {
+        return;
+    };
+    let IoSlot { byte_ptr, slice } = slot;
+    let DataSlice::Bit(bit) = *slice else {
+        return;
+    };
+}
+
 pub type Address = u32;
 
 #[derive(Resource, Default, Reflect)]
@@ -67,7 +81,7 @@ impl<const N: usize> DigitalInputDevice<N> {
     }
 }
 
-#[derive(Reflect)]
+#[derive(Reflect, Clone, Copy)]
 pub enum DataSlice {
     Byte,
     Bit(u8),
@@ -82,7 +96,7 @@ pub struct ConnectedTo(pub Entity);
 #[relationship_target(relationship = ConnectedTo)]
 pub struct AttachedThings(Vec<Entity>);
 
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Clone, Copy)]
 pub struct IoSlot {
     pub byte_ptr: u8,
     pub slice: DataSlice,
@@ -102,3 +116,12 @@ pub struct IoThing {
     pub io_device: ConnectedTo,
     pub slot: IoSlot,
 }
+
+#[derive(Event)]
+pub enum SwitchEvent {
+    Closed,
+    Opened,
+}
+
+#[derive(Component, Default)]
+pub struct ISwitch;

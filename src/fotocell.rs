@@ -5,7 +5,7 @@ use bevy::{color::palettes::css, prelude::*};
 use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
 use crate::{
-    io::{ConnectedTo, IoSlot},
+    io::{ConnectedTo, ISwitch, IoSlot, SwitchEvent},
     sysorder::InitSet,
 };
 
@@ -81,26 +81,30 @@ pub struct LaserBundle {
     collision_marker: CollisionEventsEnabled,
 }
 
-pub fn laser_blocked(
+pub fn close_color_on(
     trigger: Trigger<OnCollisionStart>,
-    mut laserq: Query<&mut PolylineMaterialHandle, With<DetectorRay>>,
+    mut laserq: Query<(&mut PolylineMaterialHandle, &ChildOf), With<DetectorRay>>,
+    mut cmd: Commands,
     assets: Res<FotocellAssets>,
 ) {
-    let Ok(mut derp) = laserq.get_mut(trigger.target()) else {
+    let Ok((mut laser, sensor)) = laserq.get_mut(trigger.target()) else {
         return;
     };
-    *derp = PolylineMaterialHandle(assets.foto_materials.laser_triggerd.clone());
+    *laser = PolylineMaterialHandle(assets.foto_materials.laser_triggerd.clone());
+    cmd.entity(sensor.0).trigger(SwitchEvent::Closed);
 }
 
-pub fn laser_unblocked(
+pub fn open_color_on(
     trigger: Trigger<OnCollisionEnd>,
-    mut laserq: Query<&mut PolylineMaterialHandle, With<DetectorRay>>,
+    mut laserq: Query<(&mut PolylineMaterialHandle, &ChildOf), With<DetectorRay>>,
+    mut cmd: Commands,
     assets: Res<FotocellAssets>,
 ) {
-    let Ok(mut derp) = laserq.get_mut(trigger.target()) else {
+    let Ok((mut laser, sensor)) = laserq.get_mut(trigger.target()) else {
         return;
     };
-    *derp = PolylineMaterialHandle(assets.foto_materials.laser_normal.clone());
+    *laser = PolylineMaterialHandle(assets.foto_materials.laser_normal.clone());
+    cmd.entity(sensor.0).trigger(SwitchEvent::Opened);
 }
 
 impl LaserBundle {
@@ -132,6 +136,7 @@ pub struct FotocellBundle {
     pub device: ConnectedTo,
     pub mesh: Mesh3d,
     pub material: MeshMaterial3d<StandardMaterial>,
+    pub switch: ISwitch,
 }
 
 impl FotocellBundle {
@@ -148,6 +153,7 @@ impl FotocellBundle {
             device: ConnectedTo(io_device),
             mesh: Mesh3d(fotocell_assets.emmiter.clone()),
             material: MeshMaterial3d(fotocell_assets.foto_materials.emmiter.clone()),
+            switch: ISwitch::default(),
         }
     }
     pub fn with_translation(self, translation: Vec3) -> (Self, Transform) {
