@@ -22,7 +22,7 @@ pub struct DeviceNetwork {
     pub address_map: HashMap<NetAddress, Entity>,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Debug)]
 pub struct IoDevices {
     pub input: HashMap<NetAddress, BitVec<u32>>,
 }
@@ -52,7 +52,7 @@ impl<const N: usize> DIOModule<N> {
 #[derive(Component, Reflect)]
 pub struct ConnectedTo(pub NetAddress);
 
-#[derive(Component, Reflect, Clone, Copy, Deref, DerefMut)]
+#[derive(Component, Reflect, Clone, Copy, Deref, DerefMut, Debug)]
 pub struct DIOPin(pub u16);
 
 #[derive(Bundle)]

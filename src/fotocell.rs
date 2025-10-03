@@ -98,11 +98,11 @@ pub fn on_fotocell_blocked(
         println!("no such address:{}", connection.0);
         return;
     };
+    dbg!(pin);
     data.as_mut_bitslice().set(**pin as usize, true);
-    println!("yay");
 }
 pub fn on_fotocell_unblocked(
-    trigger: Trigger<OnCollisionStart>,
+    trigger: Trigger<OnCollisionEnd>,
     query: Query<(&Children, &ConnectedTo, &DIOPin)>,
     mut io: ResMut<IoDevices>,
     mut cmd: Commands,

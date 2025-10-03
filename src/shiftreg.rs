@@ -13,6 +13,7 @@ impl Plugin for ShiftRegPlugin {
         app.init_resource::<DetailAssets>();
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
         app.add_systems(Startup, spawn_test_detail.in_set(InitSet::Spawn));
+        app.add_systems(Update, animate_test_detail);
     }
 }
 
@@ -21,8 +22,21 @@ fn spawn_test_detail(mut cmd: Commands, assets: Res<DetailAssets>) {
         DetailBundle::new(&assets),
         Name::new("Detail_1"),
         RigidBody::Kinematic,
+        Transform::from_xyz(0.0, 0.6, 0.0),
+        LinearVelocity(Vec3 {
+            z: 2.0,
+            ..Default::default()
+        }),
     );
     cmd.spawn(bundle);
+}
+
+fn animate_test_detail(q: Query<&mut Transform, With<Detail>>) {
+    for mut transform in q {
+        if transform.translation.z > 10.0 {
+            transform.translation.z -= 20.0;
+        }
+    }
 }
 
 fn load_assets(
@@ -43,7 +57,6 @@ pub struct Detail;
 
 #[derive(Bundle)]
 pub struct DetailBundle {
-    pub transform: Transform,
     marker: Detail,
     mesh: Mesh3d,
     material: MeshMaterial3d<StandardMaterial>,
@@ -54,7 +67,6 @@ impl DetailBundle {
     pub fn new(assets: &DetailAssets) -> Self {
         Self {
             marker: Detail,
-            transform: Transform::default(),
             mesh: Mesh3d(assets.base_shape.clone()),
             material: MeshMaterial3d(assets.normal_material.clone()),
             collider: assets.collider.clone(),

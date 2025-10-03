@@ -13,8 +13,8 @@ use tbana::TbanaBundle;
 
 use crate::{
     fotocell::{
-        on_fotocell_blocked, on_laser_color, FotocellAssets, FotocellBundle, FotocellPlugin,
-        LaserBundle,
+        on_fotocell_blocked, on_fotocell_unblocked, on_laser_color, FotocellAssets, FotocellBundle,
+        FotocellPlugin, LaserBundle,
     },
     io::{DIOPin, DeviceNetwork, IoDevices, IoPlugin, NetAddress},
     shiftreg::{Detail, ShiftRegPlugin},
@@ -66,6 +66,7 @@ fn spawn_some_stuff(
             let fotocell = cmd
                 .spawn((fotocell, transform))
                 .observe(on_fotocell_blocked)
+                .observe(on_fotocell_unblocked)
                 .id();
             cmd.entity(fotocell).add_child(laser);
             fotocell
