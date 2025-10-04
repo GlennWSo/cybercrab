@@ -94,7 +94,7 @@ pub fn on_fotocell_blocked(
     for child in children {
         cmd.entity(*child).trigger(SetButtonColor::Pressed);
     }
-    let Some(data) = io.input.get_mut(&connection.0) else {
+    let Some(data) = io.inputs.get_mut(&connection.0) else {
         println!("no such address:{}", connection.0);
         return;
     };
@@ -113,7 +113,7 @@ pub fn on_fotocell_unblocked(
     for child in children {
         cmd.entity(*child).trigger(SetButtonColor::Released);
     }
-    let Some(data) = io.input.get_mut(&connection.0) else {
+    let Some(data) = io.inputs.get_mut(&connection.0) else {
         println!("no such address:{}", connection.0);
         return;
     };

@@ -5,6 +5,7 @@ pub mod io;
 pub mod shiftreg;
 mod sysorder;
 mod tbana;
+pub mod ui;
 use avian3d::prelude::PhysicsPlugins;
 pub use sysorder::InitSet;
 pub use tbana::TbanaPlugin;
@@ -20,6 +21,7 @@ use crate::{
     shiftreg::{Detail, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
     tbana::{PushTo, TBanaAssets},
+    ui::UIPlugin,
 };
 
 use bitvec::prelude::*;
@@ -30,6 +32,7 @@ impl Plugin for DummyPlugin {
         app.add_plugins(TbanaPlugin);
         app.add_plugins(IoPlugin);
         app.add_plugins(FotocellPlugin);
+        app.add_plugins(UIPlugin);
         app.add_plugins(SysOrderPlugin);
         app.add_plugins(ShiftRegPlugin);
         app.add_plugins(PhysicsPlugins::default());
@@ -44,7 +47,7 @@ fn spawn_some_stuff(
     mut io: ResMut<IoDevices>,
 ) {
     let device_address: NetAddress = 0;
-    io.input.insert(device_address, bitvec![u32, Lsb0; 0; 32]);
+    io.inputs.insert(device_address, bitvec![u32, Lsb0; 0; 32]);
 
     let fotocells: Vec<_> = (1..=12)
         .map(|i| {

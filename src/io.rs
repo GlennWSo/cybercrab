@@ -24,7 +24,7 @@ pub struct DeviceNetwork {
 
 #[derive(Resource, Default, Debug)]
 pub struct IoDevices {
-    pub input: HashMap<NetAddress, BitVec<u32>>,
+    pub inputs: HashMap<NetAddress, BitVec<u32>>,
 }
 
 #[derive(Component, Reflect)]
