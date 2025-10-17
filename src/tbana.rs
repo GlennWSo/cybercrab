@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use bevy::color::palettes::css;
-use bevy::prelude::*;
+use bevy::prelude::{Mesh3d, *};
 
 use crate::shiftreg::Slot;
 use crate::sysorder::InitSet;
@@ -25,7 +25,6 @@ pub fn load_assets(
     mut material_assets: ResMut<Assets<StandardMaterial>>,
     mut tbana_res: ResMut<TBanaAssets>,
 ) {
-    let block_mesh = mesh_assets.add(Extrusion::new(Rectangle::default(), 2.0));
     let ready_mode = material_assets.add(StandardMaterial {
         base_color: css::CORNSILK.into(),
         ..Default::default()
@@ -38,15 +37,32 @@ pub fn load_assets(
         base_color: css::CRIMSON.into(),
         ..Default::default()
     });
+    tbana_res.bana_materials.ready = ready_mode;
+    tbana_res.bana_materials.running = run_mode;
+    tbana_res.bana_materials.alarm = alarm_mode;
+    let shade = 0.1;
+    let ready_mode = material_assets.add(StandardMaterial {
+        base_color: css::CORNSILK.darker(shade).into(),
+        ..Default::default()
+    });
+    let run_mode = material_assets.add(StandardMaterial {
+        base_color: css::CHARTREUSE.darker(shade).into(),
+        ..Default::default()
+    });
+    let alarm_mode = material_assets.add(StandardMaterial {
+        base_color: css::CRIMSON.darker(shade).into(),
+        ..Default::default()
+    });
+    tbana_res.wheel_materials.ready = ready_mode;
+    tbana_res.wheel_materials.running = run_mode;
+    tbana_res.wheel_materials.alarm = alarm_mode;
 
-    tbana_res.base_mesh = block_mesh;
-    tbana_res.base_materials.ready = ready_mode;
-    tbana_res.base_materials.running = run_mode;
-    tbana_res.base_materials.alarm = alarm_mode;
+    tbana_res.bana_mesh = mesh_assets.add(Extrusion::new(Rectangle::default(), 2.0));
+    tbana_res.wheel_mesh = mesh_assets.add(Extrusion::new(Circle::new(0.1), 0.6));
 }
 
 #[derive(Default)]
-struct BaseMaterials {
+struct ModeMaterials {
     ready: Handle<StandardMaterial>,
     running: Handle<StandardMaterial>,
     alarm: Handle<StandardMaterial>,
@@ -54,8 +70,10 @@ struct BaseMaterials {
 
 #[derive(Resource, Default)]
 pub struct TBanaAssets {
-    base_mesh: Handle<Mesh>,
-    base_materials: BaseMaterials,
+    bana_mesh: Handle<Mesh>,
+    bana_materials: ModeMaterials,
+    wheel_materials: ModeMaterials,
+    wheel_mesh: Handle<Mesh>,
 }
 
 #[derive(Bundle)]
@@ -76,8 +94,8 @@ impl TbanaBundle {
             tbana: TransportBana,
             auto: AutoMode::default(),
             slot: Slot::default(),
-            mesh: Mesh3d(tbana_assets.base_mesh.clone()),
-            material: MeshMaterial3d(tbana_assets.base_materials.ready.clone()),
+            mesh: Mesh3d(tbana_assets.bana_mesh.clone()),
+            material: MeshMaterial3d(tbana_assets.bana_materials.ready.clone()),
         }
     }
 }
@@ -88,6 +106,26 @@ pub struct TransportBana;
 #[derive(Reflect, Component, Default, Deref)]
 pub struct AutoMode {
     enabled: bool,
+}
+
+#[derive(Component)]
+pub struct TransportWheel;
+
+#[derive(Bundle)]
+pub struct TransportWheelBundle {
+    marker: TransportWheel,
+    mesh: Mesh3d,
+    material: MeshMaterial3d<StandardMaterial>,
+}
+
+impl TransportWheelBundle {
+    pub fn new(assets: &TBanaAssets) -> Self {
+        Self {
+            marker: TransportWheel,
+            mesh: Mesh3d(assets.wheel_mesh.clone()),
+            material: MeshMaterial3d(assets.wheel_materials.ready.clone()),
+        }
+    }
 }
 
 #[derive(Component, Reflect)]

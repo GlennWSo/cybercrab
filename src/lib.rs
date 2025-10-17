@@ -1,3 +1,5 @@
+use std::ops::Neg;
+
 use bevy::prelude::*;
 
 pub mod fotocell;
@@ -20,7 +22,7 @@ use crate::{
     io::{DIOPin, DeviceNetwork, IoDevices, IoPlugin, NetAddress},
     shiftreg::{Detail, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
-    tbana::{PushTo, TBanaAssets},
+    tbana::{PushTo, TBanaAssets, TransportWheelBundle},
     ui::UIPlugin,
 };
 
@@ -48,8 +50,9 @@ fn spawn_some_stuff(
 ) {
     let device_address: NetAddress = 0;
     io.inputs.insert(device_address, bitvec![u32, Lsb0; 0; 32]);
+    let n_banor = 3;
 
-    let fotocells: Vec<_> = (1..=12)
+    let fotocells: Vec<_> = (1..=n_banor * 4)
         .map(|i| {
             let z = (i % 2) as f32 * 0.2 - 0.1 + ((i % 4) / 2) as f32 * 1.6 - 0.8;
             let coord = Vec3 {
@@ -76,26 +79,45 @@ fn spawn_some_stuff(
         })
         .collect();
 
+    let motors_wheels: Vec<_> = (1..=n_banor * 2)
+        .map(|i| {
+            let bundle = TransportWheelBundle::new(&tbana_assets);
+            let mut z = -0.8;
+            if i % 2 == 0 {
+                z = -z;
+            };
+            let mut transform = Transform::from_xyz(0.0, 0.45, z);
+            transform.rotate_local_y(90_f32.to_radians());
+            cmd.spawn((bundle, transform)).id()
+        })
+        .collect();
+
     // cmd.entity(device_id).add_related::<ConnectedTo>(&fotocells);
-    let n = 3;
 
     let mut translation = Vec3::default();
-    let last_bundle = TbanaBundle::new(format!("Stn: {}", n), &tbana_assets);
+    let last_bundle = TbanaBundle::new(format!("Stn: {}", n_banor), &tbana_assets);
     let mut id = cmd
         .spawn((last_bundle, Transform::from_translation(translation)))
         .add_children(&fotocells[0..4])
+        .add_children(&motors_wheels[0..2])
         .id();
 
     let spaceing = 2.1;
-    for i in (1..n).rev() {
+    for i in (1..n_banor).rev() {
         translation.z += spaceing;
         let bundle = (
             TbanaBundle::new(format!("Stn: {}", i), &tbana_assets),
             Transform::from_translation(translation),
             PushTo(id),
         );
-        let foto_idx = i * 4;
-        let children = &fotocells[foto_idx..(foto_idx + 4)];
-        id = cmd.spawn(bundle).add_children(children).id();
+        let foto_idx = i as usize * 4;
+        let wheel_idx = i as usize * 2;
+        let fotos = &fotocells[foto_idx..(foto_idx + 4)];
+        let wheels = &&motors_wheels[wheel_idx..(wheel_idx + 2)];
+        id = cmd
+            .spawn(bundle)
+            .add_children(fotos)
+            .add_children(wheels)
+            .id();
     }
 }
