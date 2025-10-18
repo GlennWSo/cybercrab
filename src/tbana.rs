@@ -40,7 +40,7 @@ pub fn load_assets(
     tbana_res.bana_materials.ready = ready_mode;
     tbana_res.bana_materials.running = run_mode;
     tbana_res.bana_materials.alarm = alarm_mode;
-    let shade = 0.1;
+    let shade = 0.2;
     let ready_mode = material_assets.add(StandardMaterial {
         base_color: css::CORNSILK.darker(shade).into(),
         ..Default::default()
