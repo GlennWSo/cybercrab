@@ -10,7 +10,7 @@ use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, 
 use bitvec::vec::BitVec;
 
 use crate::{
-    io::{ConnectedTo, DIOPin, IoDevices, NetAddress, Switch},
+    io::{DIOPin, DeviceAddress, IoDevices, Switch, SwitchSet},
     sysorder::InitSet,
 };
 
@@ -84,44 +84,24 @@ pub struct LaserBundle {
 
 pub fn on_fotocell_blocked(
     trigger: Trigger<OnCollisionStart>,
-    query: Query<(&Children, &ConnectedTo, &DIOPin)>,
-    mut io: ResMut<IoDevices>,
+    query: Query<&Children>,
     mut cmd: Commands,
 ) {
-    let Ok((children, connection, pin)) = query.get(trigger.target()) else {
+    cmd.entity(trigger.target()).trigger(SwitchSet::Closed);
+    let Ok(children) = query.get(trigger.target()) else {
         return;
     };
-    for child in children {
-        cmd.entity(*child).trigger(SetButtonColor::Pressed);
-    }
-    let Some(data) = io.inputs.get_mut(&connection.0) else {
-        println!("no such address:{}", connection.0);
-        return;
-    };
-    dbg!(pin);
-    data.as_mut_bitslice().set(**pin as usize, true);
+    // for child in children {
+    //     cmd.entity(*child).trigger(SwitchSet::Closed);
+    // }
 }
-pub fn on_fotocell_unblocked(
-    trigger: Trigger<OnCollisionEnd>,
-    query: Query<(&Children, &ConnectedTo, &DIOPin)>,
-    mut io: ResMut<IoDevices>,
-    mut cmd: Commands,
-) {
-    let Ok((children, connection, pin)) = query.get(trigger.target()) else {
-        return;
-    };
-    for child in children {
-        cmd.entity(*child).trigger(SetButtonColor::Released);
-    }
-    let Some(data) = io.inputs.get_mut(&connection.0) else {
-        println!("no such address:{}", connection.0);
-        return;
-    };
-    data.as_mut_bitslice().set(**pin as usize, false);
+
+pub fn on_fotocell_unblocked(trigger: Trigger<OnCollisionEnd>, mut cmd: Commands) {
+    cmd.entity(trigger.target()).trigger(SwitchSet::Opened);
 }
 
 pub fn on_laser_color(
-    trigger: Trigger<SetButtonColor>,
+    trigger: Trigger<SwitchSet>,
     mut qlaser: Query<&mut PolylineMaterialHandle>,
     assets: Res<FotocellAssets>,
 ) {
@@ -129,8 +109,8 @@ pub fn on_laser_color(
         return;
     };
     match trigger.event() {
-        SetButtonColor::Pressed => material.0 = assets.foto_materials.laser_triggerd.clone(),
-        SetButtonColor::Released => material.0 = assets.foto_materials.laser_normal.clone(),
+        SwitchSet::Opened => material.0 = assets.foto_materials.laser_normal.clone(),
+        SwitchSet::Closed => material.0 = assets.foto_materials.laser_triggerd.clone(),
     }
 }
 
@@ -162,7 +142,7 @@ pub struct FotocellBundle {
     pub fotocell_mark: Fotocell,
     pub switch: Switch,
     pub name: Name,
-    pub device: ConnectedTo,
+    pub device: DeviceAddress,
     pub io_pin: DIOPin,
     pub mesh: Mesh3d,
     material: MeshMaterial3d<StandardMaterial>,
@@ -176,7 +156,7 @@ impl FotocellBundle {
         name: impl Into<Cow<'static, str>>,
         io_slot: DIOPin,
         fotocell_assets: &FotocellAssets,
-        io_device: NetAddress,
+        device: DeviceAddress,
         range: f32,
     ) -> Self {
         let collider = Collider::segment(
@@ -190,7 +170,7 @@ impl FotocellBundle {
             fotocell_mark: Fotocell,
             name: Name::new(name),
             io_pin: io_slot,
-            device: ConnectedTo(io_device),
+            device,
             mesh: Mesh3d(fotocell_assets.emmiter.clone()),
             material: MeshMaterial3d(fotocell_assets.foto_materials.emmiter.clone()),
             switch: default(),

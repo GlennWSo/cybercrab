@@ -19,7 +19,7 @@ use crate::{
         on_fotocell_blocked, on_fotocell_unblocked, on_laser_color, FotocellAssets, FotocellBundle,
         FotocellPlugin, LaserBundle,
     },
-    io::{DIOPin, DeviceNetwork, IoDevices, IoPlugin, NetAddress},
+    io::{on_parrent_switch, on_switch_set, DIOPin, DeviceAddress, IoDevices, IoPlugin},
     shiftreg::{Detail, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
     tbana::{PushTo, TBanaAssets, TransportWheelBundle},
@@ -48,8 +48,9 @@ fn spawn_some_stuff(
     tbana_assets: Res<TBanaAssets>,
     mut io: ResMut<IoDevices>,
 ) {
-    let device_address: NetAddress = 0;
-    io.inputs.insert(device_address, bitvec![u32, Lsb0; 0; 32]);
+    let device_address: DeviceAddress = 0.into();
+    io.digital_inputs
+        .insert(device_address, bitvec![u32, Lsb0; 0; 32]);
     let n_banor = 3;
 
     let fotocells: Vec<_> = (1..=n_banor * 4)
@@ -73,6 +74,7 @@ fn spawn_some_stuff(
                 .spawn((fotocell, transform))
                 .observe(on_fotocell_blocked)
                 .observe(on_fotocell_unblocked)
+                .observe(on_parrent_switch)
                 .id();
             cmd.entity(fotocell).add_child(laser);
             fotocell
