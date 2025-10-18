@@ -2043,6 +2043,7 @@ dependencies = [
  "bevy-inspector-egui",
  "bevy_polyline",
  "bitvec",
+ "itertools 0.14.0",
  "rand 0.9.2",
 ]
 
