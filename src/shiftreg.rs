@@ -1,7 +1,8 @@
-use std::sync::Arc;
+use std::{ops::Index, sync::Arc};
 
 use avian3d::{collision::collider, prelude::*};
 use bevy::{color::palettes::css, prelude::*};
+use bitvec::{array::BitArray, BitArr};
 
 use crate::InitSet;
 
@@ -11,6 +12,7 @@ impl Plugin for ShiftRegPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Slot>();
         app.init_resource::<DetailAssets>();
+        app.insert_resource(Register::new(10));
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
         app.add_systems(Startup, spawn_test_detail.in_set(InitSet::Spawn));
         app.add_systems(Update, animate_test_detail);
@@ -24,7 +26,7 @@ fn spawn_test_detail(mut cmd: Commands, assets: Res<DetailAssets>) {
         RigidBody::Kinematic,
         Transform::from_xyz(0.0, 0.6, 0.0),
         LinearVelocity(Vec3 {
-            z: 2.0,
+            z: 3.0,
             ..Default::default()
         }),
     );
@@ -81,7 +83,59 @@ pub struct DetailAssets {
     collider: Collider, // TODO turn into Asset/Handle
 }
 
-#[derive(Component, Deref, Reflect, Default)]
-pub struct Slot {
-    pub detail: Option<Entity>,
+pub type RegisterIndex = u16;
+
+#[derive(Component, Reflect, Default)]
+pub struct Slot(pub RegisterIndex);
+
+#[derive(Default, Clone)]
+pub struct DetailState {
+    bits: BitArr!(for 32, in u32),
+    bits_set: BitArr!(for 32, in u32),
+}
+impl DetailState {
+    pub fn get_bit(&self, idx: usize) -> Option<bool> {
+        if self.bits_set[idx] {
+            return None;
+        }
+        Some(self.bits[idx])
+    }
+}
+
+#[derive(Resource)]
+pub struct Register {
+    details: Vec<Option<DetailState>>,
+}
+
+impl Register {
+    pub fn new(n_details: usize) -> Self {
+        let mut details = vec![None; n_details];
+        if n_details > 0 {
+            details[0] = Some(DetailState::default());
+        }
+        Self { details }
+    }
+    pub fn pop_detail(&mut self) -> Option<DetailState> {
+        if self.details.len() == 0 {
+            return None;
+        }
+        let idx = self.details.len() - 1;
+        self.details[idx].take()
+    }
+    pub fn shift_detail_forward(&mut self, idx: usize) -> Result<()> {
+        if self.details.len() == idx {
+            let detail = self.details[idx].take();
+            self.details.push(detail);
+            return Ok(());
+        } else if self.details.len() < idx {
+            return Err(format!("target idx {idx} is to big").into());
+        }
+
+        let detail = self.details[idx].take();
+        let Some(next) = self.details.get_mut(idx + 1) else {
+            return Err(format!("Next slot already taken {idx}").into());
+        };
+        *next = detail;
+        Ok(())
+    }
 }
