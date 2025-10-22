@@ -37,29 +37,21 @@
         };
         craneLib = (crane.mkLib pkgs).overrideToolchain (_p: rust);
 
-        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
-          glib
-          gtk3
-          libxkbcommon
-          libz
-          pkg-config
-          vulkan-loader
-          wayland
-          wayland-protocols
-          zlib
-          alsa-lib.dev
-        ]);
-
         commonRust = {
           src = craneLib.cleanCargoSource ./.;
           buildInputs = with pkgs; [
             # Add extra build inputs here, etc.
-            openssl
+            glib
+            gtk3
+            libxkbcommon
+            libz
+            pkg-config
+            vulkan-loader
+            wayland
+            wayland-protocols
+            zlib
             alsa-lib.dev
-            udev.dev
-            xorg.libX11.dev
-            xorg.libXcursor.dev
-            xorg.libXi.dev
+            udev
           ];
           nativeBuildInputs = with pkgs; [
             # Add extra native build inputs here, etc.
@@ -71,11 +63,17 @@
             # Be warned that using `//` will not do a deep copy of nested sets
             pname = "mycrate-deps";
           });
+        cybercrab = craneLib.buildPackage (commonRust
+          // {
+            # pname = ""
+            inherit cargoArtifacts;
+          });
       in rec {
         packages.default = packages.hello;
         devShells.default = craneLib.devShell {
-          inputsFrom = [packages.hello];
-          inherit LD_LIBRARY_PATH;
+          inputsFrom = [cybercrab];
+          # inherit LD_LIBRARY_PATH;
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath commonRust.buildInputs;
           packages = [
             pkgs.rust-analyzer
           ];
