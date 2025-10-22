@@ -1,13 +1,8 @@
 use std::borrow::Cow;
 
 use avian3d::prelude::*;
-use bevy::{
-    color::palettes::css,
-    ecs::{component::HookContext, world::DeferredWorld},
-    prelude::*,
-};
-use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
-use bitvec::vec::BitVec;
+use bevy::{color::palettes::css, prelude::*};
+// use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
 use crate::{
     io::{DIOPin, DeviceAddress, IoDevices, Switch, SwitchSet},
@@ -18,9 +13,10 @@ pub struct FotocellPlugin;
 
 impl Plugin for FotocellPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(PolylinePlugin);
         app.init_resource::<FotocellAssets>();
+        app.init_gizmo_group::<DetectorGizmos>();
         app.add_systems(Startup, load_fotocell_assets.in_set(InitSet::LoadAssets));
+        app.add_systems(Update, render_fotocell_detector);
     }
 }
 
@@ -39,17 +35,14 @@ const LASER_VERTS: [Vec3; 2] = [
 fn load_fotocell_assets(
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
-    mut polylines_materials: ResMut<Assets<PolylineMaterial>>,
-    mut polylines: ResMut<Assets<Polyline>>,
+    // mut polylines_materials: ResMut<Assets<PolylineMaterial>>,
+    // mut polylines: ResMut<Assets<Polyline>>,
     mut fotocell_assets: ResMut<FotocellAssets>,
 ) {
     fotocell_assets.emmiter = mesh_assets.add(Extrusion::new(
         Rectangle::new(0.02, 0.02),
         LASER_VERTS[0].z - 0.01,
     ));
-    fotocell_assets.laser_poly = polylines.add(Polyline {
-        vertices: LASER_VERTS.into(),
-    });
     material_assets.add(StandardMaterial {
         base_color: css::HOT_PINK.into(),
         ..Default::default()
@@ -58,81 +51,48 @@ fn load_fotocell_assets(
         base_color: css::LAVENDER.into(),
         ..Default::default()
     });
-    let width = 2.0;
-    fotocell_assets.foto_materials.laser_normal = polylines_materials.add(PolylineMaterial {
-        color: css::ORCHID.into(),
-        width,
-        perspective: false,
-        ..Default::default()
-    });
-    fotocell_assets.foto_materials.laser_triggerd = polylines_materials.add(PolylineMaterial {
-        color: css::LIME.into(),
-        width,
-        perspective: false,
-        ..Default::default()
-    });
 }
 
 #[derive(Component)]
 pub struct DetectorRay;
 
-#[derive(Bundle)]
-pub struct LaserBundle {
-    pub poly: PolylineBundle,
-    pub name: Name,
+pub fn on_fotocell_blocked(trigger: On<CollisionStart>, mut cmd: Commands) {
+    cmd.trigger(SwitchSet {
+        entity: trigger.event_target(),
+        closed: true,
+    });
 }
 
-pub fn on_fotocell_blocked(
-    trigger: Trigger<OnCollisionStart>,
-    query: Query<&Children>,
-    mut cmd: Commands,
+pub fn on_fotocell_unblocked(trigger: On<CollisionEnd>, mut cmd: Commands) {
+    cmd.trigger(SwitchSet {
+        entity: trigger.event_target(),
+        closed: false,
+    });
+}
+
+#[derive(Default, Reflect, GizmoConfigGroup)]
+struct DetectorGizmos;
+
+fn render_fotocell_detector(
+    mut gizmos: Gizmos<DetectorGizmos>,
+    q: Query<(&Fotocell, &GlobalTransform, &DeviceAddress, &DIOPin)>,
+    devices: Res<IoDevices>,
 ) {
-    cmd.entity(trigger.target()).trigger(SwitchSet::Closed);
-    let Ok(children) = query.get(trigger.target()) else {
-        return;
-    };
-    // for child in children {
-    //     cmd.entity(*child).trigger(SwitchSet::Closed);
-    // }
-}
+    for (fc, transform, address, pin) in q {
+        let start = transform.translation();
+        let end = start - transform.forward() * fc.range;
 
-pub fn on_fotocell_unblocked(trigger: Trigger<OnCollisionEnd>, mut cmd: Commands) {
-    cmd.entity(trigger.target()).trigger(SwitchSet::Opened);
-}
-
-pub fn on_laser_color(
-    trigger: Trigger<SwitchSet>,
-    mut qlaser: Query<&mut PolylineMaterialHandle>,
-    assets: Res<FotocellAssets>,
-) {
-    let Ok(mut material) = qlaser.get_mut(trigger.target()) else {
-        return;
-    };
-    match trigger.event() {
-        SwitchSet::Opened => material.0 = assets.foto_materials.laser_normal.clone(),
-        SwitchSet::Closed => material.0 = assets.foto_materials.laser_triggerd.clone(),
-    }
-}
-
-#[derive(Event)]
-pub enum SetButtonColor {
-    Pressed,
-    Released,
-}
-
-impl LaserBundle {
-    pub fn new(assets: &FotocellAssets) -> Self {
-        let polyline = PolylineHandle(assets.laser_poly.clone());
-        let material = PolylineMaterialHandle(assets.foto_materials.laser_normal.clone());
-        let poly = PolylineBundle {
-            polyline,
-            material,
-            ..default()
+        let color = match devices.digital_inputs.get(address) {
+            Some(device) => match device.get(pin.as_usize()).map(|bit| *bit) {
+                Some(true) => css::GREEN,
+                Some(false) => css::PURPLE,
+                None => css::GRAY, // no value at pin number
+            },
+            None => css::DARK_GRAY, // no device
         };
-        Self {
-            poly,
-            name: Name::new("Fotocell Laser"),
-        }
+        // let color = match devices.digital_inputs.get(k)
+
+        gizmos.line(start, end, color);
     }
 }
 
@@ -167,7 +127,7 @@ impl FotocellBundle {
             },
         );
         Self {
-            fotocell_mark: Fotocell,
+            fotocell_mark: Fotocell { range },
             name: Name::new(name),
             io_pin: io_slot,
             device,
@@ -188,20 +148,22 @@ impl FotocellBundle {
 struct FotoCellMaterials {
     emmiter: Handle<StandardMaterial>,
     reflector: Handle<StandardMaterial>,
-    laser_normal: Handle<PolylineMaterial>,
-    laser_triggerd: Handle<PolylineMaterial>,
+    // laser_normal: Handle<PolylineMaterial>,
+    // laser_triggerd: Handle<PolylineMaterial>,
 }
 
 #[derive(Resource, Default)]
 pub struct FotocellAssets {
     emmiter: Handle<Mesh>,
-    laser_poly: Handle<Polyline>,
+    // laser_poly: Handle<Polyline>,
     reflector: Handle<Mesh>,
     foto_materials: FotoCellMaterials,
 }
 
 #[derive(Component)]
-pub struct Fotocell;
+pub struct Fotocell {
+    range: f32,
+}
 
 // Fotocell,
 // Name::new(format!("fotocell{i}")),

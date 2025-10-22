@@ -1,5 +1,3 @@
-use std::ops::Neg;
-
 use bevy::prelude::*;
 
 pub mod fotocell;
@@ -16,11 +14,10 @@ use tbana::TbanaBundle;
 
 use crate::{
     fotocell::{
-        on_fotocell_blocked, on_fotocell_unblocked, on_laser_color, FotocellAssets, FotocellBundle,
-        FotocellPlugin, LaserBundle,
+        on_fotocell_blocked, on_fotocell_unblocked, FotocellAssets, FotocellBundle, FotocellPlugin,
     },
-    io::{on_parrent_switch, on_switch_set, DIOPin, DeviceAddress, IoDevices, IoPlugin},
-    shiftreg::{Detail, ShiftRegPlugin},
+    io::{on_parrent_switch, DIOPin, DeviceAddress, IoDevices, IoPlugin},
+    shiftreg::ShiftRegPlugin,
     sysorder::SysOrderPlugin,
     tbana::{PushTo, TBanaAssets, TransportWheelBundle},
     ui::UIPlugin,
@@ -68,16 +65,11 @@ fn spawn_some_stuff(
             let io_slot = DIOPin(i - 1);
             let fotocell =
                 FotocellBundle::new(name, io_slot, &fotocell_assets, device_address, 0.8);
-            let laser = LaserBundle::new(&fotocell_assets);
-            let laser = cmd.spawn(laser).observe(on_laser_color).id();
-            let fotocell = cmd
-                .spawn((fotocell, transform))
+            cmd.spawn((fotocell, transform))
                 .observe(on_fotocell_blocked)
                 .observe(on_fotocell_unblocked)
                 .observe(on_parrent_switch)
-                .id();
-            cmd.entity(fotocell).add_child(laser);
-            fotocell
+                .id()
         })
         .collect();
 

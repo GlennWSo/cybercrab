@@ -1,4 +1,4 @@
-use bevy::{platform::collections::HashMap, prelude::*, render::render_resource::AddressMode};
+use bevy::{platform::collections::HashMap, prelude::*};
 use bitvec::vec::BitVec;
 
 pub struct IoPlugin;
@@ -63,7 +63,7 @@ impl<const N: usize> DIOModule<N> {
 pub struct DIOPin(pub u16);
 
 impl DIOPin {
-    const fn as_usize(self) -> usize {
+    pub const fn as_usize(self) -> usize {
         self.0 as usize
     }
 }
@@ -71,28 +71,12 @@ impl DIOPin {
 #[derive(Component, Default, Reflect)]
 pub struct Switch;
 
-#[derive(Event, Clone, Copy)]
-pub enum SwitchSet {
-    Opened,
-    Closed,
-}
+// pub enum SwitchState{}
 
-impl From<bool> for SwitchSet {
-    fn from(value: bool) -> Self {
-        match value {
-            true => Self::Closed,
-            false => Self::Opened,
-        }
-    }
-}
-
-impl SwitchSet {
-    fn bit(&self) -> bool {
-        match self {
-            SwitchSet::Opened => false,
-            SwitchSet::Closed => true,
-        }
-    }
+#[derive(EntityEvent, Clone, Copy)]
+pub struct SwitchSet {
+    pub entity: Entity,
+    pub closed: bool,
 }
 
 #[derive(Event)]
@@ -103,7 +87,7 @@ pub struct DigitalInputSet {
 }
 
 fn on_digital_input_set(
-    trigger: Trigger<DigitalInputSet>,
+    trigger: On<DigitalInputSet>,
     q: Query<(Entity, &DeviceAddress, &DIOPin), With<Switch>>,
     mut cmd: Commands,
 ) {
@@ -117,16 +101,19 @@ fn on_digital_input_set(
         }
     });
     for switch in switches {
-        cmd.entity(switch).trigger(SwitchSet::from(trigger.value));
+        cmd.trigger(SwitchSet {
+            entity: switch,
+            closed: true,
+        });
     }
 }
 
 pub fn on_switch_set(
-    trigger: Trigger<SwitchSet>,
+    trigger: On<SwitchSet>,
     q: Query<(&DeviceAddress, &DIOPin), With<Switch>>,
     mut io: ResMut<IoDevices>,
 ) {
-    let switch_id = trigger.target();
+    let switch_id = trigger.entity;
     let Ok((address, pin)) = q.get(switch_id) else {
         return;
     };
@@ -137,15 +124,18 @@ pub fn on_switch_set(
     else {
         return;
     };
-    bits.set(pin.as_usize(), trigger.bit());
+    bits.set(pin.as_usize(), trigger.closed);
 }
 
 /// propagate on_switch
-pub fn on_parrent_switch(trigger: Trigger<SwitchSet>, mut cmd: Commands, q: Query<&Children>) {
-    let Ok(children) = q.get(trigger.target()) else {
+pub fn on_parrent_switch(trigger: On<SwitchSet>, mut cmd: Commands, q: Query<&Children>) {
+    let Ok(children) = q.get(trigger.entity) else {
         return;
     };
     for child in children {
-        cmd.entity(*child).trigger(*trigger.event());
+        cmd.trigger(SwitchSet {
+            entity: *child,
+            closed: trigger.closed,
+        })
     }
 }

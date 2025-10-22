@@ -1,8 +1,6 @@
-use std::{ops::Index, sync::Arc};
-
-use avian3d::{collision::collider, prelude::*};
+use avian3d::prelude::*;
 use bevy::{color::palettes::css, prelude::*};
-use bitvec::{array::BitArray, BitArr};
+use bitvec::BitArr;
 
 use crate::InitSet;
 

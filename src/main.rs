@@ -2,17 +2,13 @@ use std::f32::consts::PI;
 
 use avian3d::prelude::{Collider, CollidingEntities, RigidBody};
 use bevy::{
-    color::palettes::css,
     input::{common_conditions::input_just_released, mouse::AccumulatedMouseMotion},
     prelude::*,
-    window::{CursorGrabMode, PrimaryWindow, WindowFocused},
+    window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowFocused},
 };
 use bevy_inspector_egui::bevy_egui::EguiPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-use bevy_polyline::prelude::{
-    Polyline, PolylineBundle, PolylineHandle, PolylineMaterial, PolylineMaterialHandle,
-};
 use cybercrab::{DummyPlugin, InitSet};
 
 const PI2: f32 = PI / 2.0;
@@ -26,7 +22,7 @@ fn spawn_camera(mut cmd: Commands) {
         Player,
         Transform::from_translation(position),
         Camera {
-            hdr: true,
+            // hdr: true,
             ..Default::default()
         },
         Msaa::Sample4,
@@ -119,17 +115,18 @@ fn player_move(
     player.translation += to_move * dt * PLAYER_SPEED;
 }
 
-fn apply_grab(grab: Trigger<GrabEvent>, mut window: Single<&mut Window, With<PrimaryWindow>>) {
+fn apply_grab(grab: On<GrabEvent>, mut cursor: Single<&mut CursorOptions, With<PrimaryWindow>>) {
     if **grab {
-        window.cursor_options.visible = false;
-        window.cursor_options.grab_mode = CursorGrabMode::Locked;
+        cursor.visible = false;
+        // window.curso
+        cursor.grab_mode = CursorGrabMode::Locked;
     } else {
-        window.cursor_options.visible = true;
-        window.cursor_options.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
+        cursor.grab_mode = CursorGrabMode::None;
     }
 }
 
-fn handle_focus_events(mut events: EventReader<WindowFocused>, mut cmd: Commands) {
+fn handle_focus_events(mut events: MessageReader<WindowFocused>, mut cmd: Commands) {
     if let Some(event) = events.read().last() {
         cmd.trigger(GrabEvent(event.focused));
     }
@@ -143,10 +140,10 @@ fn toggle_grab(mut window: Single<&mut Window, With<PrimaryWindow>>, mut cmd: Co
 fn shoot_ball(
     input: Res<ButtonInput<MouseButton>>,
     player: Single<&Transform, With<Player>>,
-    mut spawner: EventWriter<BallSpawn>,
-    window: Single<&Window, With<PrimaryWindow>>,
+    mut spawner: MessageWriter<BallSpawn>,
+    window: Single<&CursorOptions, With<PrimaryWindow>>,
 ) {
-    if window.cursor_options.visible {
+    if window.visible {
         return;
     }
     if !input.just_pressed(MouseButton::Left) {
@@ -158,7 +155,7 @@ fn shoot_ball(
 }
 
 fn spawn_ball(
-    mut events: EventReader<BallSpawn>,
+    mut events: MessageReader<BallSpawn>,
     mut cmd: Commands,
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut mat_assets: ResMut<Assets<StandardMaterial>>,
@@ -202,7 +199,7 @@ fn main() {
         ),
     );
     app.add_observer(apply_grab);
-    app.add_event::<BallSpawn>();
+    app.add_message::<BallSpawn>();
     app.run();
 }
 
@@ -212,7 +209,7 @@ struct Player;
 #[derive(Event, Deref)]
 struct GrabEvent(bool);
 
-#[derive(Event)]
+#[derive(Message)]
 struct BallSpawn {
     position: Vec3,
 }

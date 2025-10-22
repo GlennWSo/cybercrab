@@ -1,12 +1,9 @@
 use std::io::Read;
 
 use bevy::prelude::*;
-use bevy_inspector_egui::bevy_egui::{egui, EguiContexts, EguiPlugin, EguiPrimaryContextPass};
-use bitvec::field::BitField;
+use bevy_inspector_egui::bevy_egui::{egui, EguiContexts, EguiPrimaryContextPass};
 
 use crate::io::{DIOPin, DigitalInputSet, IoDevices};
-use itertools::Itertools;
-
 pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
