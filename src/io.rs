@@ -12,8 +12,6 @@ impl Plugin for IoPlugin {
     }
 }
 
-// pub type NodeAddress = u32;
-
 #[derive(Component, Reflect, Default, Hash, PartialEq, Eq, Debug, Clone, Copy)]
 pub struct DeviceAddress(pub u32);
 
@@ -23,41 +21,11 @@ impl From<u32> for DeviceAddress {
     }
 }
 
-// #[derive(Resource, Default, Reflect)]
-// #[reflect(Resource)]
-// pub struct DeviceNetwork {
-//     pub address_map: HashMap<NodeAddress, Entity>,
-// }
-
 #[derive(Resource, Default, Debug)]
 pub struct IoDevices {
     pub digital_inputs: HashMap<DeviceAddress, BitVec<u32>>,
+    pub digital_outputs: HashMap<DeviceAddress, BitVec<u32>>,
 }
-
-#[derive(Component, Reflect)]
-pub struct DIOModule<const S: usize> {
-    data: [bool; S],
-}
-
-impl<const N: usize> DIOModule<N> {
-    fn new() -> Self {
-        Self { data: [false; N] }
-    }
-    // pub fn spawn(
-    //     cmd: &mut Commands,
-    //     net: &mut DeviceNetwork,
-    //     name: &'static str,
-    //     address: NodeAddress,
-    // ) -> Entity {
-    //     let new_device = Self::new();
-    //     let id = cmd.spawn((new_device, Name::new(name))).id();
-    //     net.address_map.insert(address, id);
-    //     id
-    // }
-}
-
-// #[derive(Component, Reflect, Deref, DerefMut)]
-// pub struct ConnectedTo(pub NodeAddress);
 
 #[derive(Component, Reflect, Clone, Copy, Deref, DerefMut, Debug, PartialEq, Eq)]
 pub struct DIOPin(pub u16);
@@ -71,19 +39,25 @@ impl DIOPin {
 #[derive(Component, Default, Reflect)]
 pub struct Switch;
 
-// pub enum SwitchState{}
-
 #[derive(EntityEvent, Clone, Copy)]
 pub struct SwitchSet {
     pub entity: Entity,
     pub closed: bool,
 }
 
+// pub struct DigitalSensor
+
 #[derive(Event)]
 pub struct DigitalInputSet {
     pub address: DeviceAddress,
     pub pin: DIOPin,
     pub value: bool,
+}
+
+#[derive(Bundle, Reflect)]
+pub struct Dio {
+    pub address: DeviceAddress,
+    pub pin: DIOPin,
 }
 
 fn on_digital_input_set(

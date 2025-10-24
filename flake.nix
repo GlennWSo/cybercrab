@@ -11,7 +11,7 @@
   };
 
   outputs = {
-    self,
+    # self,
     nixpkgs,
     flake-utils,
     rust-overlay,

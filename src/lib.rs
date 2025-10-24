@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 pub mod fotocell;
 pub mod io;
+pub mod plc;
+pub mod sensor;
 pub mod shiftreg;
 mod sysorder;
 mod tbana;
@@ -19,7 +21,7 @@ use crate::{
     io::{on_parrent_switch, DIOPin, DeviceAddress, IoDevices, IoPlugin},
     shiftreg::ShiftRegPlugin,
     sysorder::SysOrderPlugin,
-    tbana::{PushTo, TBanaAssets, TransportWheelBundle},
+    tbana::{MovimotDQ, PushTo, TBanaAssets, TransportWheelBundle},
     ui::UIPlugin,
 };
 
@@ -48,6 +50,8 @@ fn spawn_some_stuff(
     let device_address: DeviceAddress = 0.into();
     io.digital_inputs
         .insert(device_address, bitvec![u32, Lsb0; 0; 32]);
+    io.digital_outputs
+        .insert(device_address, bitvec![u32, Lsb0; 0; 32]);
     let n_banor = 3;
 
     let fotocells: Vec<_> = (1..=n_banor * 4)
@@ -75,7 +79,11 @@ fn spawn_some_stuff(
 
     let motors_wheels: Vec<_> = (1..=n_banor * 2)
         .map(|i| {
-            let bundle = TransportWheelBundle::new(&tbana_assets);
+            let q_fw = i * 8;
+            let q_rev = q_fw + 1;
+            let q_rapid = q_rev + 2;
+            let bundle =
+                TransportWheelBundle::new(&tbana_assets, MovimotDQ::new(0, q_fw, q_rev, q_rapid));
             let mut z = -0.8;
             if i % 2 == 0 {
                 z = -z;

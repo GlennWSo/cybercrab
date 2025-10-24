@@ -1,8 +1,10 @@
 use std::borrow::Cow;
 
+use avian3d::prelude::Collider;
 use bevy::color::palettes::css;
 use bevy::prelude::{Mesh3d, *};
 
+use crate::io::{DIOPin, DeviceAddress, Dio};
 use crate::shiftreg::Slot;
 use crate::sysorder::InitSet;
 
@@ -15,6 +17,7 @@ impl Plugin for TbanaPlugin {
         app.register_type::<Reciver>();
         app.register_type::<PullFrom>();
         app.register_type::<Giver>();
+        app.register_type::<Movimot>();
         app.init_resource::<TBanaAssets>();
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
     }
@@ -74,6 +77,7 @@ pub struct TBanaAssets {
     bana_materials: ModeMaterials,
     wheel_materials: ModeMaterials,
     wheel_mesh: Handle<Mesh>,
+    wheel_collider: Collider,
 }
 
 #[derive(Bundle)]
@@ -109,21 +113,79 @@ pub struct AutoMode {
 }
 
 #[derive(Component)]
-pub struct TransportWheel;
+pub struct Wheel;
+
+// enum MoviMotion {
+//     FastForward,
+//     Forward,
+//     FastReverse,
+//     Reverse,
+//     Stop,
+// }
+
+#[derive(Component, Reflect)]
+pub struct MovimotDQ {
+    forward: Dio,
+    reverse: Dio,
+    rapid: Dio,
+}
+
+impl MovimotDQ {
+    pub fn new(address: u32, fw: u16, rev: u16, rapid: u16) -> Self {
+        let address = DeviceAddress(address);
+        let forward = Dio {
+            address,
+            pin: DIOPin(fw),
+        };
+        let reverse = Dio {
+            address,
+            pin: DIOPin(rev),
+        };
+
+        let rapid = Dio {
+            address,
+            pin: DIOPin(rapid),
+        };
+
+        Self {
+            forward,
+            reverse,
+            rapid,
+        }
+    }
+}
+
+#[derive(Component, Reflect)]
+pub struct Movimot {
+    // pub motion: MoviMotion,
+    pub fast_speed: f32,
+    pub slow_speed: f32,
+    pub dq: MovimotDQ,
+}
+
+impl Movimot {}
 
 #[derive(Bundle)]
 pub struct TransportWheelBundle {
-    marker: TransportWheel,
+    marker: Wheel,
     mesh: Mesh3d,
     material: MeshMaterial3d<StandardMaterial>,
+    collider: Collider,
+    motor: Movimot,
 }
 
 impl TransportWheelBundle {
-    pub fn new(assets: &TBanaAssets) -> Self {
+    pub fn new(assets: &TBanaAssets, dq: MovimotDQ) -> Self {
         Self {
-            marker: TransportWheel,
+            marker: Wheel,
             mesh: Mesh3d(assets.wheel_mesh.clone()),
             material: MeshMaterial3d(assets.wheel_materials.ready.clone()),
+            collider: assets.wheel_collider.clone(),
+            motor: Movimot {
+                dq,
+                fast_speed: 10.0,
+                slow_speed: 2.0,
+            },
         }
     }
 }
