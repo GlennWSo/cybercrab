@@ -12,12 +12,48 @@ impl Plugin for IoPlugin {
     }
 }
 
-#[derive(Component, Reflect, Default, Hash, PartialEq, Eq, Debug, Clone, Copy)]
+#[derive(Component, Reflect, Default, Hash, PartialEq, Eq, Debug, Clone, Copy, Deref)]
 pub struct DeviceAddress(pub u32);
 
 impl From<u32> for DeviceAddress {
     fn from(value: u32) -> Self {
         Self(value)
+    }
+}
+
+#[derive(Component)]
+pub struct DIOModule {
+    pub address: DeviceAddress,
+    free_pins: BitVec<u32>,
+}
+
+impl DIOModule {
+    pub fn new(address: DeviceAddress, n_bits: usize) -> Self {
+        let mut free_pins = BitVec::new();
+        free_pins.resize(n_bits, true);
+        Self { address, free_pins }
+    }
+    pub fn take_pin(&mut self, pin_idx: usize) -> Option<Dio> {
+        let mut is_free = self.free_pins.get_mut(pin_idx)?;
+        let not_free = !*is_free;
+        if not_free {
+            return None;
+        }
+
+        *is_free = false;
+        Some(Dio {
+            address: self.address,
+            pin: DIOPin(pin_idx as u16),
+        })
+    }
+}
+
+impl Iterator for DIOModule {
+    type Item = Dio;
+
+    /// drains the DioModule of free pins
+    fn next(&mut self) -> Option<Self::Item> {
+        (0..self.free_pins.len()).find_map(|idx| self.take_pin(idx))
     }
 }
 
