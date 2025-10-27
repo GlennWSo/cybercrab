@@ -7,7 +7,7 @@ use bevy_inspector_egui::{
 };
 use bitvec::prelude::BitVec;
 
-use crate::io::{DIOPin, DeviceAddress, DigitalInputSet, IoDevices};
+use crate::io::{DigitalInputSet, DioPin, IOStore, IoDevices, NodeId};
 pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
@@ -33,12 +33,12 @@ fn dio_ui(mut cmd: Commands, mut contexts: EguiContexts, mut io: ResMut<IoDevice
 fn io_widget(
     cmd: &mut Commands,
     ui: &mut egui::Ui,
-    hash_map: &mut HashMap<DeviceAddress, BitVec<u32>>,
+    hash_map: &mut HashMap<NodeId, IOStore>,
     header: &'static str,
 ) {
-    for (address, signals) in hash_map.iter_mut() {
+    for (address, store) in hash_map.iter_mut() {
         ui.collapsing(format!("{} Device: {}", header, address.0), |ui| {
-            let bytes = signals.chunks_exact_mut(8);
+            let bytes = store.state.chunks_exact_mut(8);
             for (address, byte) in bytes.enumerate() {
                 ui.horizontal_top(|ui| {
                     ui.collapsing(format!("B {address}"), |ui| {
@@ -48,7 +48,7 @@ fn io_widget(
                                 if ui.checkbox(&mut bit, format!(".{ix}")).changed() {
                                     cmd.trigger(DigitalInputSet {
                                         address: (address as u32).into(),
-                                        pin: DIOPin(ix as u16),
+                                        pin: DioPin(ix as u16),
                                         value: *bit,
                                     });
                                 }

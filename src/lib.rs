@@ -9,6 +9,7 @@ mod sysorder;
 mod tbana;
 pub mod ui;
 use avian3d::prelude::PhysicsPlugins;
+use itertools::Itertools;
 pub use sysorder::InitSet;
 pub use tbana::TbanaPlugin;
 
@@ -18,7 +19,7 @@ use crate::{
     fotocell::{
         on_fotocell_blocked, on_fotocell_unblocked, FotocellAssets, FotocellBundle, FotocellPlugin,
     },
-    io::{on_parrent_switch, DIOPin, DeviceAddress, IoDevices, IoPlugin},
+    io::{on_parrent_switch, Dio, DioPin, IOStore, IoDevices, IoPlugin, NodeId},
     shiftreg::ShiftRegPlugin,
     sysorder::SysOrderPlugin,
     tbana::{MovimotDQ, PushTo, SpawnTbana4x2, TBanaAssets, TransportWheelBundle},
@@ -47,23 +48,43 @@ fn spawn_some_stuff(
     tbana_assets: Res<TBanaAssets>,
     mut io: ResMut<IoDevices>,
 ) {
-    let device_address: DeviceAddress = 0.into();
+    let n_banor = 8;
+    let io_size = 8 * n_banor;
+    let device_address: NodeId = 0.into();
     io.digital_inputs
-        .insert(device_address, bitvec![u32, Lsb0; 0; 32]);
+        .insert(device_address, IOStore::new(io_size));
     io.digital_outputs
-        .insert(device_address, bitvec![u32, Lsb0; 0; 32]);
-    let n_banor = 3;
+        .insert(device_address, IOStore::new(io_size));
 
     let mut translation = Vec3::default();
 
     let spaceing = 2.1;
-    for i in (1..n_banor).rev() {
+    for i in (1..=n_banor).rev() {
+        let inputs = io.digital_inputs.get_mut(&device_address).unwrap();
+        let inputs = inputs
+            .take(4)
+            .map(|pin| Dio {
+                address: device_address,
+                pin,
+            })
+            .collect_array()
+            .unwrap();
+        let outputs = io.digital_outputs.get_mut(&device_address).unwrap();
+        let outputs = outputs
+            .take(6)
+            .map(|pin| Dio {
+                address: device_address,
+                pin,
+            })
+            .collect_array()
+            .unwrap();
+
         translation.z = spaceing * (i - 1) as f32;
         cmd.trigger(SpawnTbana4x2::new(
             None,
             format!("stn {i}"),
-            todo!(),
-            todo!(),
+            inputs,
+            outputs,
             Transform::from_translation(translation),
         ));
     }

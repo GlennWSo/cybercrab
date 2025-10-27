@@ -6,7 +6,7 @@ use bevy::prelude::{Mesh3d, *};
 use itertools::Itertools;
 
 use crate::fotocell::{on_fotocell_blocked, on_fotocell_unblocked, FotocellAssets, FotocellBundle};
-use crate::io::{DIOPin, DeviceAddress, Dio, IoDevices};
+use crate::io::{Dio, DioPin, IoDevices, NodeId};
 use crate::shiftreg::Slot;
 use crate::sysorder::InitSet;
 
@@ -228,19 +228,19 @@ pub struct MovimotDQ {
 
 impl MovimotDQ {
     pub fn new(address: u32, fw: u16, rev: u16, rapid: u16) -> Self {
-        let address = DeviceAddress(address);
+        let address = NodeId(address);
         let forward = Dio {
             address,
-            pin: DIOPin(fw),
+            pin: DioPin(fw),
         };
         let reverse = Dio {
             address,
-            pin: DIOPin(rev),
+            pin: DioPin(rev),
         };
 
         let rapid = Dio {
             address,
-            pin: DIOPin(rapid),
+            pin: DioPin(rapid),
         };
 
         Self {

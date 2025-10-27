@@ -2,7 +2,7 @@ use avian3d::prelude::*;
 use bevy::{color::palettes::css, prelude::*};
 use bitvec::BitArr;
 
-use crate::InitSet;
+use crate::{tbana::TransportBana, InitSet};
 
 pub struct ShiftRegPlugin;
 
@@ -31,9 +31,18 @@ fn spawn_test_detail(mut cmd: Commands, assets: Res<DetailAssets>) {
     cmd.spawn(bundle);
 }
 
-fn animate_test_detail(q: Query<&mut Transform, With<Detail>>) {
-    for mut transform in q {
-        if transform.translation.z > 10.0 {
+fn animate_test_detail(
+    details: Query<&mut Transform, With<Detail>>,
+    tbanor: Query<&Transform, (With<TransportBana>, Without<Detail>)>,
+) {
+    let max_z = tbanor
+        .into_iter()
+        .map(|trans| trans.translation.z)
+        .reduce(|acc, v| acc.max(v))
+        .unwrap()
+        + 2.0;
+    for mut transform in details {
+        if transform.translation.z > max_z {
             transform.translation.z -= 20.0;
         }
     }

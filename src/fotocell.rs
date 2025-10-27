@@ -5,7 +5,7 @@ use bevy::{color::palettes::css, prelude::*};
 // use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
 use crate::{
-    io::{DIOPin, DeviceAddress, IoDevices, Switch, SwitchSet},
+    io::{DioPin, IoDevices, NodeId, Switch, SwitchSet},
     sysorder::InitSet,
 };
 
@@ -75,7 +75,7 @@ struct DetectorGizmos;
 
 fn render_fotocell_detector(
     mut gizmos: Gizmos<DetectorGizmos>,
-    q: Query<(&Fotocell, &GlobalTransform, &DeviceAddress, &DIOPin)>,
+    q: Query<(&Fotocell, &GlobalTransform, &NodeId, &DioPin)>,
     devices: Res<IoDevices>,
 ) {
     for (fc, transform, address, pin) in q {
@@ -83,7 +83,7 @@ fn render_fotocell_detector(
         let end = start - transform.forward() * fc.range;
 
         let color = match devices.digital_inputs.get(address) {
-            Some(device) => match device.get(pin.as_usize()).map(|bit| *bit) {
+            Some(device) => match device.get(pin.as_usize()) {
                 Some(true) => css::GREEN,
                 Some(false) => css::PURPLE,
                 None => css::GRAY, // no value at pin number
@@ -102,8 +102,8 @@ pub struct FotocellBundle {
     pub fotocell_mark: Fotocell,
     pub switch: Switch,
     pub name: Name,
-    pub device: DeviceAddress,
-    pub io_pin: DIOPin,
+    pub device: NodeId,
+    pub io_pin: DioPin,
     pub mesh: Mesh3d,
     material: MeshMaterial3d<StandardMaterial>,
     simbody: RigidBody,
@@ -114,9 +114,9 @@ pub struct FotocellBundle {
 impl FotocellBundle {
     pub fn new(
         name: impl Into<Cow<'static, str>>,
-        io_slot: DIOPin,
+        io_slot: DioPin,
         fotocell_assets: &FotocellAssets,
-        device: DeviceAddress,
+        device: NodeId,
         range: f32,
     ) -> Self {
         let collider = Collider::segment(
