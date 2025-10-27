@@ -2,7 +2,7 @@ use avian3d::prelude::*;
 use bevy::{color::palettes::css, prelude::*};
 use bitvec::BitArr;
 
-use crate::{tbana::TransportBana, InitSet};
+use crate::{physics::PhysLayer, tbana::TransportBana, InitSet};
 
 pub struct ShiftRegPlugin;
 
@@ -24,7 +24,7 @@ fn spawn_test_detail(mut cmd: Commands, assets: Res<DetailAssets>) {
         RigidBody::Kinematic,
         Transform::from_xyz(0.0, 0.6, 0.0),
         LinearVelocity(Vec3 {
-            z: 3.0,
+            // z: 3.0,
             ..Default::default()
         }),
     );
@@ -70,6 +70,7 @@ pub struct DetailBundle {
     mesh: Mesh3d,
     material: MeshMaterial3d<StandardMaterial>,
     collider: Collider,
+    phys_layers: CollisionLayers,
 }
 
 impl DetailBundle {
@@ -79,6 +80,7 @@ impl DetailBundle {
             mesh: Mesh3d(assets.base_shape.clone()),
             material: MeshMaterial3d(assets.normal_material.clone()),
             collider: assets.collider.clone(),
+            phys_layers: CollisionLayers::new(PhysLayer::Detail, LayerMask::ALL),
         }
     }
 }

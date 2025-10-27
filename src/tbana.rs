@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 
-use avian3d::prelude::Collider;
+use avian3d::prelude::{Collider, CollisionLayers};
 use bevy::color::palettes::css;
 use bevy::prelude::{Mesh3d, *};
-use itertools::Itertools;
 
 use crate::fotocell::{on_fotocell_blocked, on_fotocell_unblocked, FotocellAssets, FotocellBundle};
-use crate::io::{Dio, DioPin, IoDevices, NodeId};
+use crate::io::{Dio, DioPin, NodeId};
+use crate::physics::PhysLayer;
 use crate::shiftreg::Slot;
 use crate::sysorder::InitSet;
 
@@ -62,6 +62,7 @@ fn on_spawn_tbana(
     let z_values = [-0.9, -0.7, 0.7, 0.9];
     let fc_names = ["forward_end", "forward_slow", "reverse_slow", "reverse_end"];
     let io_inputs = spawn.io_inputs.iter();
+    let phys_layers = CollisionLayers::new(PhysLayer::Sensor, PhysLayer::Detail);
     let fotocells: Vec<_> = io_inputs
         .zip(z_values)
         .zip(fc_names)
@@ -74,7 +75,7 @@ fn on_spawn_tbana(
             let mut transform = Transform::from_translation(coord);
             transform.rotate_local_y(-90_f32.to_radians());
             let fotocell = FotocellBundle::new(name, dio.pin, &fotocell_assets, dio.address, 0.8);
-            cmd.spawn((fotocell, transform))
+            cmd.spawn((fotocell, transform, phys_layers))
                 .observe(on_fotocell_blocked)
                 .observe(on_fotocell_unblocked)
                 .id()
@@ -83,6 +84,7 @@ fn on_spawn_tbana(
 
     let z_values = [-0.8, 0.8];
     let mut io_outputs = spawn.io_outputs.iter();
+    let phys_layers = CollisionLayers::new(PhysLayer::Actuator, PhysLayer::Detail);
     let motors_wheels: Vec<_> = z_values
         .into_iter()
         .map(|z| {
@@ -99,7 +101,7 @@ fn on_spawn_tbana(
             );
             let mut transform = Transform::from_xyz(0.0, 0.45, z);
             transform.rotate_local_y(90_f32.to_radians());
-            cmd.spawn((bundle, transform)).id()
+            cmd.spawn((bundle, transform, phys_layers)).id()
         })
         .collect();
 
@@ -227,6 +229,7 @@ pub struct MovimotDQ {
 }
 
 impl MovimotDQ {
+    #[allow(dead_code)]
     pub fn new(address: u32, fw: u16, rev: u16, rapid: u16) -> Self {
         let address = NodeId(address);
         let forward = Dio {

@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 pub mod fotocell;
 pub mod io;
+pub mod physics;
 pub mod plc;
 pub mod sensor;
 pub mod shiftreg;
@@ -42,12 +43,7 @@ impl Plugin for DummyPlugin {
     }
 }
 
-fn spawn_some_stuff(
-    mut cmd: Commands,
-    fotocell_assets: Res<FotocellAssets>,
-    tbana_assets: Res<TBanaAssets>,
-    mut io: ResMut<IoDevices>,
-) {
+fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
     let n_banor = 8;
     let io_size = 8 * n_banor;
     let device_address: NodeId = 0.into();
