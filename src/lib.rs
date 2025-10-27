@@ -21,7 +21,7 @@ use crate::{
     io::{on_parrent_switch, DIOPin, DeviceAddress, IoDevices, IoPlugin},
     shiftreg::ShiftRegPlugin,
     sysorder::SysOrderPlugin,
-    tbana::{MovimotDQ, PushTo, TBanaAssets, TransportWheelBundle},
+    tbana::{MovimotDQ, PushTo, SpawnTbana4x2, TBanaAssets, TransportWheelBundle},
     ui::UIPlugin,
 };
 
@@ -54,72 +54,17 @@ fn spawn_some_stuff(
         .insert(device_address, bitvec![u32, Lsb0; 0; 32]);
     let n_banor = 3;
 
-    let fotocells: Vec<_> = (1..=n_banor * 4)
-        .map(|i| {
-            let z = (i % 2) as f32 * 0.2 - 0.1 + ((i % 4) / 2) as f32 * 1.6 - 0.8;
-            let coord = Vec3 {
-                x: 0.45,
-                y: 0.53,
-                z,
-            };
-            let mut transform = Transform::from_translation(coord);
-            transform.rotate_local_y(-90_f32.to_radians());
-
-            let name = format!("fotocell_{i}");
-            let io_slot = DIOPin(i - 1);
-            let fotocell =
-                FotocellBundle::new(name, io_slot, &fotocell_assets, device_address, 0.8);
-            cmd.spawn((fotocell, transform))
-                .observe(on_fotocell_blocked)
-                .observe(on_fotocell_unblocked)
-                .observe(on_parrent_switch)
-                .id()
-        })
-        .collect();
-
-    let motors_wheels: Vec<_> = (1..=n_banor * 2)
-        .map(|i| {
-            let q_fw = i * 8;
-            let q_rev = q_fw + 1;
-            let q_rapid = q_rev + 2;
-            let bundle =
-                TransportWheelBundle::new(&tbana_assets, MovimotDQ::new(0, q_fw, q_rev, q_rapid));
-            let mut z = -0.8;
-            if i % 2 == 0 {
-                z = -z;
-            };
-            let mut transform = Transform::from_xyz(0.0, 0.45, z);
-            transform.rotate_local_y(90_f32.to_radians());
-            cmd.spawn((bundle, transform)).id()
-        })
-        .collect();
-
-    // cmd.entity(device_id).add_related::<ConnectedTo>(&fotocells);
-
     let mut translation = Vec3::default();
-    let last_bundle = TbanaBundle::new(format!("Stn: {}", n_banor), &tbana_assets);
-    let mut id = cmd
-        .spawn((last_bundle, Transform::from_translation(translation)))
-        .add_children(&fotocells[0..4])
-        .add_children(&motors_wheels[0..2])
-        .id();
 
     let spaceing = 2.1;
     for i in (1..n_banor).rev() {
-        translation.z += spaceing;
-        let bundle = (
-            TbanaBundle::new(format!("Stn: {}", i), &tbana_assets),
+        translation.z = spaceing * (i - 1) as f32;
+        cmd.trigger(SpawnTbana4x2::new(
+            None,
+            format!("stn {i}"),
+            todo!(),
+            todo!(),
             Transform::from_translation(translation),
-            PushTo(id),
-        );
-        let foto_idx = i as usize * 4;
-        let wheel_idx = i as usize * 2;
-        let fotos = &fotocells[foto_idx..(foto_idx + 4)];
-        let wheels = &&motors_wheels[wheel_idx..(wheel_idx + 2)];
-        id = cmd
-            .spawn(bundle)
-            .add_children(fotos)
-            .add_children(wheels)
-            .id();
+        ));
     }
 }

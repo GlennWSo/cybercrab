@@ -90,7 +90,7 @@ pub struct DigitalInputSet {
     pub value: bool,
 }
 
-#[derive(Bundle, Reflect)]
+#[derive(Bundle, Reflect, Clone, Copy)]
 pub struct Dio {
     pub address: DeviceAddress,
     pub pin: DIOPin,

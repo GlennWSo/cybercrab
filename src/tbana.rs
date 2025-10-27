@@ -3,8 +3,10 @@ use std::borrow::Cow;
 use avian3d::prelude::Collider;
 use bevy::color::palettes::css;
 use bevy::prelude::{Mesh3d, *};
+use itertools::Itertools;
 
-use crate::io::{DIOPin, DeviceAddress, Dio};
+use crate::fotocell::{on_fotocell_blocked, on_fotocell_unblocked, FotocellAssets, FotocellBundle};
+use crate::io::{DIOPin, DeviceAddress, Dio, IoDevices};
 use crate::shiftreg::Slot;
 use crate::sysorder::InitSet;
 
@@ -20,7 +22,104 @@ impl Plugin for TbanaPlugin {
         app.register_type::<Movimot>();
         app.init_resource::<TBanaAssets>();
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
+        app.add_observer(on_spawn_tbana);
     }
+}
+
+#[derive(Event, Clone)]
+pub struct SpawnTbana4x2 {
+    parrent: Option<Entity>,
+    name: Cow<'static, str>,
+    io_inputs: [Dio; 4],
+    io_outputs: [Dio; 2 * 3],
+    transform: Transform,
+}
+
+impl SpawnTbana4x2 {
+    pub fn new(
+        parrent: Option<Entity>,
+        name: impl Into<Cow<'static, str>>,
+        io_inputs: [Dio; 4],
+        io_outputs: [Dio; 2 * 3],
+        transform: Transform,
+    ) -> Self {
+        Self {
+            parrent,
+            name: name.into(),
+            io_inputs,
+            io_outputs,
+            transform,
+        }
+    }
+}
+
+fn on_spawn_tbana(
+    spawn: On<SpawnTbana4x2>,
+    mut cmd: Commands,
+    fotocell_assets: Res<FotocellAssets>,
+    tbana_assets: Res<TBanaAssets>,
+) {
+    let z_values = [-0.9, -0.7, 0.7, 0.9];
+    let fc_names = ["forward_end", "forward_slow", "reverse_slow", "reverse_end"];
+    let io_inputs = spawn.io_inputs.iter();
+    let fotocells: Vec<_> = io_inputs
+        .zip(z_values)
+        .zip(fc_names)
+        .map(|((dio, z), name)| {
+            let coord = Vec3 {
+                x: 0.45,
+                y: 0.53,
+                z,
+            };
+            let mut transform = Transform::from_translation(coord);
+            transform.rotate_local_y(-90_f32.to_radians());
+            let fotocell = FotocellBundle::new(name, dio.pin, &fotocell_assets, dio.address, 0.8);
+            cmd.spawn((fotocell, transform))
+                .observe(on_fotocell_blocked)
+                .observe(on_fotocell_unblocked)
+                .id()
+        })
+        .collect();
+
+    let z_values = [-0.8, 0.8];
+    let mut io_outputs = spawn.io_outputs.iter();
+    let motors_wheels: Vec<_> = z_values
+        .into_iter()
+        .map(|z| {
+            let forward = *io_outputs.next().unwrap();
+            let reverse = *io_outputs.next().unwrap();
+            let rapid = *io_outputs.next().unwrap();
+            let bundle = TransportWheelBundle::new(
+                &tbana_assets,
+                MovimotDQ {
+                    forward,
+                    reverse,
+                    rapid,
+                },
+            );
+            let mut transform = Transform::from_xyz(0.0, 0.45, z);
+            transform.rotate_local_y(90_f32.to_radians());
+            cmd.spawn((bundle, transform)).id()
+        })
+        .collect();
+
+    let bundle = (
+        TbanaBundle::new(&tbana_assets),
+        spawn.transform,
+        Name::new(spawn.name.clone()),
+    );
+    match spawn.parrent {
+        Some(parrent) => {
+            cmd.spawn((bundle, ChildOf(parrent)))
+                .add_children(&fotocells[0..4])
+                .add_children(&motors_wheels[0..2]);
+        }
+        None => {
+            cmd.spawn(bundle)
+                .add_children(&fotocells[0..4])
+                .add_children(&motors_wheels[0..2]);
+        }
+    };
 }
 
 pub fn load_assets(
@@ -83,7 +182,6 @@ pub struct TBanaAssets {
 #[derive(Bundle)]
 pub struct TbanaBundle {
     pub tbana: TransportBana,
-    pub name: Name,
     pub auto: AutoMode,
     pub slot: Slot,
     pub mesh: Mesh3d,
@@ -91,10 +189,8 @@ pub struct TbanaBundle {
 }
 
 impl TbanaBundle {
-    pub fn new(name: impl Into<Cow<'static, str>>, tbana_assets: &TBanaAssets) -> Self {
-        let name = Name::new(name);
+    pub fn new(tbana_assets: &TBanaAssets) -> Self {
         Self {
-            name,
             tbana: TransportBana,
             auto: AutoMode::default(),
             slot: Slot::default(),
