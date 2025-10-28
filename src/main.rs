@@ -55,11 +55,12 @@ fn spawn_map(
 
 fn player_look(
     mut player: Single<&mut Transform, With<Player>>,
-    window: Single<&Window, With<PrimaryWindow>>,
+    window: Single<(&Window, &CursorOptions), With<PrimaryWindow>>,
     mouse_motion: Res<AccumulatedMouseMotion>,
     time: Res<Time>,
 ) {
-    if !window.focused {
+    let (window, cursor_options) = *window;
+    if !window.focused || cursor_options.visible {
         return;
     }
     let dt = time.delta_secs();
@@ -75,10 +76,12 @@ fn player_look(
 fn player_move(
     mut player: Single<&mut Transform, With<Player>>,
     input: Res<ButtonInput<KeyCode>>,
-    window: Single<&Window, With<PrimaryWindow>>,
+    window: Single<(&Window, &CursorOptions), With<PrimaryWindow>>,
+    // cursor: Single<&CursorOptions, With<PrimaryWindow>>,
     time: Res<Time>,
 ) {
-    if !window.focused {
+    let (window, cursor_options) = *window;
+    if !window.focused || cursor_options.visible {
         return;
     }
     let dt = time.delta_secs();
@@ -187,7 +190,7 @@ fn main() {
         Update,
         (
             player_look,
-            handle_focus_events,
+            // handle_focus_events,
             toggle_grab.run_if(input_just_released(KeyCode::Escape)),
         ),
     );
