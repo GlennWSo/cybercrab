@@ -7,7 +7,7 @@ use bevy_inspector_egui::{
 };
 use bitvec::prelude::BitVec;
 
-use crate::io::{DigitalInputSet, DioPin, IOStore, IoDevices, NodeId};
+use crate::io::{DioPin, IOStore, Io, IoDevices, NodeId, UIOveride};
 pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
@@ -23,9 +23,9 @@ fn dio_ui(mut cmd: Commands, mut contexts: EguiContexts, mut io: ResMut<IoDevice
             // egui::ScrollArea::vertical().show(ui, |ui| {});
 
             ui.label("Digital Inputs");
-            io_widget(&mut cmd, ui, &mut io.digital_inputs, "input");
+            io_widget(&mut cmd, ui, &mut io.digital_inputs, "input", Io::Input);
             ui.label("Digital Outputs");
-            io_widget(&mut cmd, ui, &mut io.digital_outputs, "output");
+            io_widget(&mut cmd, ui, &mut io.digital_outputs, "output", Io::Output);
         });
     Ok(())
 }
@@ -35,6 +35,7 @@ fn io_widget(
     ui: &mut egui::Ui,
     hash_map: &mut HashMap<NodeId, IOStore>,
     header: &'static str,
+    kind: Io,
 ) {
     for (address, store) in hash_map.iter_mut() {
         ui.collapsing(format!("{} Device: {}", header, address.0), |ui| {
@@ -46,10 +47,11 @@ fn io_widget(
                             ui.horizontal(|ui| {
                                 // ui.label(format!("bit: {ix}"));
                                 if ui.checkbox(&mut bit, format!(".{ix}")).changed() {
-                                    cmd.trigger(DigitalInputSet {
+                                    cmd.trigger(UIOveride {
                                         address: (address as u32).into(),
                                         pin: DioPin(ix as u16),
                                         value: *bit,
+                                        kind,
                                     });
                                 }
                             });

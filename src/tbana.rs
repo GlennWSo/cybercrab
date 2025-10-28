@@ -1,13 +1,13 @@
 use std::borrow::Cow;
 
-use avian3d::prelude::{Collider, CollisionLayers};
+use avian3d::prelude::{Collider, CollidingEntities, CollisionLayers, LinearVelocity};
 use bevy::color::palettes::css;
 use bevy::prelude::{Mesh3d, *};
 
 use crate::fotocell::{on_fotocell_blocked, on_fotocell_unblocked, FotocellAssets, FotocellBundle};
-use crate::io::{Dio, DioPin, NodeId};
+use crate::io::{Dio, DioPin, IoDevices, NodeId};
 use crate::physics::PhysLayer;
-use crate::shiftreg::Slot;
+use crate::shiftreg::{Detail, Slot};
 use crate::sysorder::InitSet;
 
 pub struct TbanaPlugin;
@@ -22,6 +22,7 @@ impl Plugin for TbanaPlugin {
         app.register_type::<Movimot>();
         app.init_resource::<TBanaAssets>();
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
+        app.add_systems(Update, motor_effect);
         app.add_observer(on_spawn_tbana);
     }
 }
@@ -52,6 +53,48 @@ impl SpawnTbana4x2 {
         }
     }
 }
+
+fn motor_effect(
+    target: Query<(&CollidingEntities, &mut LinearVelocity), Without<Movimot>>,
+    motors: Query<(&Movimot, &Transform)>,
+    io: Res<IoDevices>,
+) {
+    for (colliding, mut velocity) in target {
+        let motors = colliding.iter().filter_map(|id| motors.get(*id).ok());
+        let speeds: Vec<_> = motors
+            .map(|(motor, transform)| {
+                let fw = io.get_output_bit(motor.dq.forward.address, motor.dq.forward.pin);
+                let rev = io.get_output_bit(motor.dq.reverse.address, motor.dq.reverse.pin);
+                let rapid =
+                    io.get_output_bit(motor.dq.rapid.address, motor.dq.rapid.pin) == Some(true);
+                let speed = if rapid {
+                    motor.fast_speed
+                } else {
+                    motor.slow_speed
+                };
+                match (fw, rev) {
+                    (Some(true), Some(true)) => {
+                        eprintln!("motor cant run in both directions");
+                        dbg!(Vec3::ZERO)
+                    }
+                    (Some(true), _) => speed * transform.left(),
+                    (_, Some(true)) => -speed * transform.left(),
+                    // (None, None) => 0_f32,
+                    _ => Vec3::ZERO,
+                }
+            })
+            .collect();
+        let n = speeds.len();
+        if n == 0 {
+            velocity.0 = Vec3::ZERO;
+            continue;
+        }
+        let avg_speed = speeds.into_iter().sum::<Vec3>() / (n as f32);
+        velocity.0 = avg_speed;
+    }
+}
+
+// fn tbana_motor_effects(motors: Query<(&CollidingEntities, &MovimotDQ)>, io: Res<IoDevices>) {}
 
 fn on_spawn_tbana(
     spawn: On<SpawnTbana4x2>,
@@ -221,7 +264,7 @@ pub struct Wheel;
 //     Stop,
 // }
 
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Copy, Clone, Debug)]
 pub struct MovimotDQ {
     forward: Dio,
     reverse: Dio,
@@ -254,7 +297,7 @@ impl MovimotDQ {
     }
 }
 
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Debug)]
 pub struct Movimot {
     // pub motion: MoviMotion,
     pub fast_speed: f32,

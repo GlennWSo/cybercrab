@@ -7,8 +7,8 @@ impl Plugin for IoPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<NodeId>();
         app.init_resource::<IoDevices>();
-        app.add_observer(on_digital_input_set);
-        app.add_observer(on_switch_set);
+        app.add_observer(on_ui_overide);
+        app.add_observer(on_bit_set);
     }
 }
 
@@ -102,6 +102,13 @@ pub struct IoDevices {
     pub digital_outputs: HashMap<NodeId, IOStore>,
 }
 
+impl IoDevices {
+    pub fn get_output_bit(&self, node: NodeId, pin: DioPin) -> Option<bool> {
+        let device = self.digital_outputs.get(&node)?;
+        device.get(pin.as_usize())
+    }
+}
+
 #[derive(Component, Reflect, Clone, Copy, Deref, DerefMut, Debug, PartialEq, Eq)]
 pub struct DioPin(pub u16);
 
@@ -118,25 +125,33 @@ pub struct Switch;
 pub struct SwitchSet {
     pub entity: Entity,
     pub closed: bool,
+    pub kind: Io,
 }
 
 // pub struct DigitalSensor
 
+#[derive(Debug, Clone, Copy)]
+pub enum Io {
+    Input,
+    Output,
+}
+
 #[derive(Event)]
-pub struct DigitalInputSet {
+pub struct UIOveride {
     pub address: NodeId,
     pub pin: DioPin,
     pub value: bool,
+    pub kind: Io,
 }
 
-#[derive(Bundle, Reflect, Clone, Copy)]
+#[derive(Bundle, Reflect, Clone, Copy, Debug)]
 pub struct Dio {
     pub address: NodeId,
     pub pin: DioPin,
 }
 
-fn on_digital_input_set(
-    trigger: On<DigitalInputSet>,
+fn on_ui_overide(
+    trigger: On<UIOveride>,
     q: Query<(Entity, &NodeId, &DioPin), With<Switch>>,
     mut cmd: Commands,
 ) {
@@ -153,11 +168,12 @@ fn on_digital_input_set(
         cmd.trigger(SwitchSet {
             entity: switch,
             closed: trigger.value,
+            kind: trigger.kind,
         });
     }
 }
 
-pub fn on_switch_set(
+pub fn on_bit_set(
     trigger: On<SwitchSet>,
     q: Query<(&NodeId, &DioPin), With<Switch>>,
     mut io: ResMut<IoDevices>,
@@ -166,8 +182,13 @@ pub fn on_switch_set(
     let Ok((address, pin)) = q.get(switch_id) else {
         return;
     };
-    let Ok(bits) = io
-        .digital_inputs
+
+    let store = match trigger.kind {
+        Io::Input => &mut io.digital_inputs,
+        Io::Output => &mut io.digital_outputs,
+    };
+
+    let Ok(bits) = store
         .get_mut(address)
         .ok_or(format!("no device available at {}", address.0))
     else {
@@ -185,6 +206,7 @@ pub fn on_parrent_switch(trigger: On<SwitchSet>, mut cmd: Commands, q: Query<&Ch
         cmd.trigger(SwitchSet {
             entity: *child,
             closed: trigger.closed,
+            kind: trigger.kind,
         })
     }
 }

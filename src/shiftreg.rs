@@ -23,6 +23,7 @@ fn spawn_test_detail(mut cmd: Commands, assets: Res<DetailAssets>) {
         Name::new("Detail_1"),
         RigidBody::Kinematic,
         Transform::from_xyz(0.0, 0.6, 0.0),
+        CollidingEntities::default(),
         LinearVelocity(Vec3 {
             // z: 3.0,
             ..Default::default()

@@ -5,7 +5,7 @@ use bevy::{color::palettes::css, prelude::*};
 // use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
 use crate::{
-    io::{DioPin, IoDevices, NodeId, Switch, SwitchSet},
+    io::{DioPin, Io, IoDevices, NodeId, Switch, SwitchSet},
     sysorder::InitSet,
 };
 
@@ -60,6 +60,7 @@ pub fn on_fotocell_blocked(trigger: On<CollisionStart>, mut cmd: Commands) {
     cmd.trigger(SwitchSet {
         entity: trigger.event_target(),
         closed: true,
+        kind: Io::Input,
     });
 }
 
@@ -67,6 +68,7 @@ pub fn on_fotocell_unblocked(trigger: On<CollisionEnd>, mut cmd: Commands) {
     cmd.trigger(SwitchSet {
         entity: trigger.event_target(),
         closed: false,
+        kind: Io::Input,
     });
 }
 
