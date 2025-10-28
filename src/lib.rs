@@ -55,7 +55,7 @@ fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
     let mut translation = Vec3::default();
 
     let spaceing = 2.1;
-    for i in (1..=n_banor).rev() {
+    for i in 1..=n_banor {
         let inputs = io.digital_inputs.get_mut(&device_address).unwrap();
         let inputs = inputs
             .take(4)

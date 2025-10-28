@@ -152,7 +152,7 @@ fn on_digital_input_set(
     for switch in switches {
         cmd.trigger(SwitchSet {
             entity: switch,
-            closed: true,
+            closed: trigger.value,
         });
     }
 }
