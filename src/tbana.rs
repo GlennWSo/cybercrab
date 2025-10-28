@@ -4,10 +4,12 @@ use avian3d::prelude::{Collider, CollidingEntities, CollisionLayers, LinearVeloc
 use bevy::color::palettes::css;
 use bevy::prelude::{Mesh3d, *};
 
-use crate::fotocell::{on_fotocell_blocked, on_fotocell_unblocked, FotocellAssets, FotocellBundle};
+use crate::fotocell::{
+    on_fotocell_blocked, on_fotocell_unblocked, Fotocell, FotocellAssets, FotocellBundle,
+};
 use crate::io::{Dio, DioPin, IoDevices, NodeId};
 use crate::physics::PhysLayer;
-use crate::shiftreg::{Detail, Slot};
+use crate::shiftreg::Slot;
 use crate::sysorder::InitSet;
 
 pub struct TbanaPlugin;
@@ -22,9 +24,49 @@ impl Plugin for TbanaPlugin {
         app.register_type::<Movimot>();
         app.init_resource::<TBanaAssets>();
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
-        app.add_systems(Update, motor_effect);
+        app.add_systems(Update, (motor_effect, tbana_logic));
         app.add_observer(on_spawn_tbana);
     }
+}
+
+fn tbana_logic(
+    banor: Query<(&Children, &Direction), With<TransportBana>>,
+    sensors: Query<(&DioPin, &NodeId), (With<Fotocell>, Without<TransportBana>, Without<Movimot>)>,
+    motors: Query<&Movimot, (Without<TransportBana>, Without<Fotocell>)>,
+    mut io: ResMut<IoDevices>,
+) {
+    for (children, direction) in banor {
+        let sensors = children.iter().filter_map(|id| sensors.get(id).ok());
+        let run = sensors
+            .filter_map(|(pin, node)| io.get_input_bit(*node, *pin))
+            .skip(1) // require atleast 2 sensors
+            .any(|v| v);
+
+        dbg!(run);
+        let motors = children.iter().filter_map(|id| motors.get(id).ok());
+        for motor in motors {
+            let (address, pin) = match direction {
+                Direction::Forward => (motor.dq.forward.address, motor.dq.forward.pin),
+                Direction::Reverse => (motor.dq.reverse.address, motor.dq.reverse.pin),
+            };
+            io.set_output_bit(address, pin, run);
+        }
+    }
+}
+
+#[derive(Component, Reflect, Debug, Copy, Clone)]
+pub enum SensorRole {
+    FrontEnd,
+    FrontProximity,
+    BackEnd,
+    BackProximity,
+}
+
+#[derive(Component, Reflect, Copy, Clone, Debug, Default)]
+pub enum Direction {
+    #[default]
+    Forward,
+    Reverse,
 }
 
 #[derive(Event, Clone)]
@@ -34,6 +76,7 @@ pub struct SpawnTbana4x2 {
     io_inputs: [Dio; 4],
     io_outputs: [Dio; 2 * 3],
     transform: Transform,
+    direction: Direction,
 }
 
 impl SpawnTbana4x2 {
@@ -50,6 +93,7 @@ impl SpawnTbana4x2 {
             io_inputs,
             io_outputs,
             transform,
+            direction: default(),
         }
     }
 }
@@ -148,19 +192,20 @@ fn on_spawn_tbana(
         })
         .collect();
 
-    let bundle = (
+    let bana_bundle = (
         TbanaBundle::new(&tbana_assets),
         spawn.transform,
         Name::new(spawn.name.clone()),
+        spawn.direction,
     );
     match spawn.parrent {
         Some(parrent) => {
-            cmd.spawn((bundle, ChildOf(parrent)))
+            cmd.spawn((bana_bundle, ChildOf(parrent)))
                 .add_children(&fotocells[0..4])
                 .add_children(&motors_wheels[0..2]);
         }
         None => {
-            cmd.spawn(bundle)
+            cmd.spawn(bana_bundle)
                 .add_children(&fotocells[0..4])
                 .add_children(&motors_wheels[0..2]);
         }
@@ -245,7 +290,7 @@ impl TbanaBundle {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 pub struct TransportBana;
 
 #[derive(Reflect, Component, Default, Deref)]

@@ -103,9 +103,17 @@ pub struct IoDevices {
 }
 
 impl IoDevices {
+    pub fn get_input_bit(&self, node: NodeId, pin: DioPin) -> Option<bool> {
+        let device = self.digital_inputs.get(&node)?;
+        device.get(pin.as_usize())
+    }
     pub fn get_output_bit(&self, node: NodeId, pin: DioPin) -> Option<bool> {
         let device = self.digital_outputs.get(&node)?;
         device.get(pin.as_usize())
+    }
+    pub fn set_output_bit(&mut self, node: NodeId, pin: DioPin, value: bool) {
+        let device = self.digital_outputs.get_mut(&node).unwrap();
+        device.set(pin.as_usize(), value);
     }
 }
 
