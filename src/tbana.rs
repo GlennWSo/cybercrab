@@ -37,12 +37,13 @@ fn tbana_logic(
 ) {
     for (children, direction) in banor {
         let sensors = children.iter().filter_map(|id| sensors.get(id).ok());
-        let run = sensors
+        let num_on_fotocells = sensors
             .filter_map(|(pin, node)| io.get_input_bit(*node, *pin))
-            .skip(1) // require atleast 2 sensors
-            .any(|v| v);
+            .filter(|v| *v)
+            .count();
+        let run = num_on_fotocells > 1;
 
-        dbg!(run);
+        dbg!(num_on_fotocells);
         let motors = children.iter().filter_map(|id| motors.get(id).ok());
         for motor in motors {
             let (address, pin) = match direction {
