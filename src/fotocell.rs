@@ -163,6 +163,7 @@ pub struct FotocellAssets {
 }
 
 #[derive(Component)]
+/// Adds fotocell behaivor to a Entity
 pub struct Fotocell {
     range: f32,
 }

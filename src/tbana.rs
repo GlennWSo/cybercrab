@@ -2,14 +2,15 @@ use std::borrow::Cow;
 
 use avian3d::prelude::{Collider, CollidingEntities, CollisionLayers, LinearVelocity};
 use bevy::color::palettes::css;
+use bevy::log::tracing::Instrument;
 use bevy::prelude::{Mesh3d, *};
 
 use crate::fotocell::{
     on_fotocell_blocked, on_fotocell_unblocked, Fotocell, FotocellAssets, FotocellBundle,
 };
-use crate::io::{Dio, DioPin, IoDevices, NodeId};
+use crate::io::{Dio, DioPin, IoDevices, NodeId, Switch};
 use crate::physics::PhysLayer;
-use crate::shiftreg::Slot;
+use crate::shiftreg::RegisterPosition;
 use crate::sysorder::InitSet;
 
 pub struct TbanaPlugin;
@@ -24,12 +25,12 @@ impl Plugin for TbanaPlugin {
         app.register_type::<Movimot>();
         app.init_resource::<TBanaAssets>();
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
-        app.add_systems(Update, (motor_effect, tbana_logic));
-        app.add_observer(on_spawn_tbana);
+        app.add_systems(Update, (motor_effect, tbana_motor_logic, tbana_ready));
+        app.add_observer(on_insert_tbana);
     }
 }
 
-fn tbana_logic(
+fn tbana_motor_logic(
     banor: Query<(&Children, &Direction), With<TransportBana>>,
     sensors: Query<(&DioPin, &NodeId), (With<Fotocell>, Without<TransportBana>, Without<Movimot>)>,
     motors: Query<&Movimot, (Without<TransportBana>, Without<Fotocell>)>,
@@ -43,9 +44,10 @@ fn tbana_logic(
             .count();
         let run = num_on_fotocells > 1;
 
-        dbg!(num_on_fotocells);
         let motors = children.iter().filter_map(|id| motors.get(id).ok());
         for motor in motors {
+            io.set_output_bit(motor.dq.forward.address, motor.dq.forward.pin, false);
+            io.set_output_bit(motor.dq.reverse.address, motor.dq.reverse.pin, false);
             let (address, pin) = match direction {
                 Direction::Forward => (motor.dq.forward.address, motor.dq.forward.pin),
                 Direction::Reverse => (motor.dq.reverse.address, motor.dq.reverse.pin),
@@ -71,31 +73,66 @@ pub enum Direction {
 }
 
 #[derive(Event, Clone)]
-pub struct SpawnTbana4x2 {
+pub struct InsertTbana4x2 {
+    entity: Entity,
     parrent: Option<Entity>,
     name: Cow<'static, str>,
     io_inputs: [Dio; 4],
     io_outputs: [Dio; 2 * 3],
     transform: Transform,
     direction: Direction,
+    register_pos: RegisterPosition,
+    push_to: Option<PushTo>,
+    pull_from: Option<PullFrom>,
 }
 
-impl SpawnTbana4x2 {
+impl InsertTbana4x2 {
     pub fn new(
+        entity: Entity,
         parrent: Option<Entity>,
         name: impl Into<Cow<'static, str>>,
         io_inputs: [Dio; 4],
         io_outputs: [Dio; 2 * 3],
         transform: Transform,
+        direction: Direction,
+        register_pos: RegisterPosition,
+        push_to: Option<PushTo>,
+        pull_from: Option<PullFrom>,
     ) -> Self {
         Self {
+            entity,
             parrent,
             name: name.into(),
             io_inputs,
             io_outputs,
             transform,
-            direction: default(),
+            direction,
+            register_pos,
+            push_to,
+            pull_from,
         }
+    }
+}
+
+fn tbana_ready(
+    tbanor: Query<(&mut Readiness, &Children), With<TransportBana>>,
+    sensors: Query<(&NodeId, &DioPin), (With<Switch>, Without<TransportBana>)>,
+    io: Res<IoDevices>,
+) {
+    for (mut tbana, children) in tbanor {
+        let sensors = children
+            .iter()
+            .filter_map(|entity| sensors.get(entity).ok());
+        let count = sensors
+            .filter(|(node, pin)| io.get_input_bit(**node, **pin).unwrap())
+            .count();
+        let ready = match count {
+            0 => Readiness::Ready { has_detail: false },
+            4 => Readiness::Ready { has_detail: true },
+            1..=3 => Readiness::Busy,
+            _ => todo!(),
+        };
+        *tbana = ready;
     }
 }
 
@@ -108,7 +145,11 @@ fn motor_effect(
         let motors = colliding.iter().filter_map(|id| motors.get(*id).ok());
         let speeds: Vec<_> = motors
             .map(|(motor, transform)| {
-                let fw = io.get_output_bit(motor.dq.forward.address, motor.dq.forward.pin);
+                let fw_node = motor.dq.forward.address;
+                let fw_pin = motor.dq.forward.pin;
+                let rev_node = motor.dq.reverse.address;
+                let rev_pin = motor.dq.reverse.pin;
+                let fw = io.get_output_bit(fw_node, fw_pin);
                 let rev = io.get_output_bit(motor.dq.reverse.address, motor.dq.reverse.pin);
                 let rapid =
                     io.get_output_bit(motor.dq.rapid.address, motor.dq.rapid.pin) == Some(true);
@@ -120,6 +161,11 @@ fn motor_effect(
                 match (fw, rev) {
                     (Some(true), Some(true)) => {
                         eprintln!("motor cant run in both directions");
+                        eprintln!("motor FW signal from address{:?}, pin{:?}", fw_node, fw_pin);
+                        eprintln!(
+                            "motor rev signal from address{:?}, pin{:?}",
+                            rev_node, rev_pin
+                        );
                         dbg!(Vec3::ZERO)
                     }
                     (Some(true), _) => speed * transform.left(),
@@ -141,8 +187,8 @@ fn motor_effect(
 
 // fn tbana_motor_effects(motors: Query<(&CollidingEntities, &MovimotDQ)>, io: Res<IoDevices>) {}
 
-fn on_spawn_tbana(
-    spawn: On<SpawnTbana4x2>,
+fn on_insert_tbana(
+    spawn: On<InsertTbana4x2>,
     mut cmd: Commands,
     fotocell_assets: Res<FotocellAssets>,
     tbana_assets: Res<TBanaAssets>,
@@ -198,15 +244,18 @@ fn on_spawn_tbana(
         spawn.transform,
         Name::new(spawn.name.clone()),
         spawn.direction,
+        spawn.register_pos,
     );
     match spawn.parrent {
         Some(parrent) => {
-            cmd.spawn((bana_bundle, ChildOf(parrent)))
+            cmd.entity(spawn.entity)
+                .insert((bana_bundle, ChildOf(parrent)))
                 .add_children(&fotocells[0..4])
                 .add_children(&motors_wheels[0..2]);
         }
         None => {
-            cmd.spawn(bana_bundle)
+            cmd.entity(spawn.entity)
+                .insert(bana_bundle)
                 .add_children(&fotocells[0..4])
                 .add_children(&motors_wheels[0..2]);
         }
@@ -274,9 +323,10 @@ pub struct TBanaAssets {
 pub struct TbanaBundle {
     pub tbana: TransportBana,
     pub auto: AutoMode,
-    pub slot: Slot,
     pub mesh: Mesh3d,
     pub material: MeshMaterial3d<StandardMaterial>,
+    pub mode: Mode,
+    pub ready: Readiness,
 }
 
 impl TbanaBundle {
@@ -284,9 +334,10 @@ impl TbanaBundle {
         Self {
             tbana: TransportBana,
             auto: AutoMode::default(),
-            slot: Slot::default(),
             mesh: Mesh3d(tbana_assets.bana_mesh.clone()),
             material: MeshMaterial3d(tbana_assets.bana_materials.ready.clone()),
+            mode: default(),
+            ready: default(),
         }
     }
 }
@@ -378,7 +429,24 @@ impl TransportWheelBundle {
     }
 }
 
-#[derive(Component, Reflect)]
+#[derive(Component, Debug, Clone, Copy, Reflect, Default)]
+pub enum Readiness {
+    #[default]
+    Busy,
+    Disabled,
+    Ready {
+        has_detail: bool,
+    },
+}
+
+#[derive(Component, Debug, Clone, Copy, Reflect, Default)]
+pub enum Mode {
+    #[default]
+    Push,
+    Pull,
+}
+
+#[derive(Component, Reflect, Clone, Copy)]
 #[relationship(relationship_target = Reciver )]
 /// Pushes production details to other
 pub struct PushTo(pub Entity);
@@ -387,7 +455,7 @@ pub struct PushTo(pub Entity);
 #[relationship_target(relationship=PushTo)]
 pub struct Reciver(Vec<Entity>);
 
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Clone, Copy)]
 #[relationship(relationship_target = Giver )]
 pub struct PullFrom(pub Entity);
 

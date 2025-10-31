@@ -13,6 +13,7 @@ impl Plugin for IoPlugin {
 }
 
 #[derive(Component, Reflect, Default, Hash, PartialEq, Eq, Debug, Clone, Copy, Deref)]
+/// Unique Id of network Device
 pub struct NodeId(pub u32);
 
 impl From<u32> for NodeId {

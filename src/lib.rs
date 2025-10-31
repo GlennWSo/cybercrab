@@ -21,9 +21,9 @@ use crate::{
         on_fotocell_blocked, on_fotocell_unblocked, FotocellAssets, FotocellBundle, FotocellPlugin,
     },
     io::{on_parrent_switch, Dio, DioPin, IOStore, IoDevices, IoPlugin, NodeId},
-    shiftreg::ShiftRegPlugin,
+    shiftreg::{RegisterPosition, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
-    tbana::{MovimotDQ, PushTo, SpawnTbana4x2, TBanaAssets, TransportWheelBundle},
+    tbana::{Direction, InsertTbana4x2, MovimotDQ, PushTo, TBanaAssets, TransportWheelBundle},
     ui::UIPlugin,
 };
 
@@ -55,7 +55,10 @@ fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
     let mut translation = Vec3::default();
 
     let spaceing = 2.1;
-    for i in 1..=n_banor {
+
+    let new_enitities: Vec<_> = (0..=n_banor).map(|i| cmd.spawn_empty().id()).collect();
+
+    for (i, entity) in new_enitities.iter().enumerate() {
         let inputs = io.digital_inputs.get_mut(&device_address).unwrap();
         let inputs = inputs
             .take(4)
@@ -75,13 +78,24 @@ fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
             .collect_array()
             .unwrap();
 
-        translation.z = spaceing * (i - 1) as f32;
-        cmd.trigger(SpawnTbana4x2::new(
+        translation.z = spaceing * i as f32;
+        let push = new_enitities.get(i + 1).map(|ent| PushTo(*ent));
+        let from = if i > 0 {
+            new_enitities.get(i - 1).map(|ent| tbana::PullFrom(*ent))
+        } else {
+            None
+        };
+        cmd.trigger(InsertTbana4x2::new(
+            *entity,
             None,
             format!("stn {i}"),
             inputs,
             outputs,
             Transform::from_translation(translation),
+            Direction::Forward,
+            RegisterPosition(i as u16),
+            push,
+            from,
         ));
     }
 }

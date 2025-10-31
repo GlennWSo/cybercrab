@@ -8,7 +8,7 @@ pub struct ShiftRegPlugin;
 
 impl Plugin for ShiftRegPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Slot>();
+        app.register_type::<RegisterPosition>();
         app.init_resource::<DetailAssets>();
         app.insert_resource(Register::new(10));
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
@@ -25,7 +25,7 @@ fn spawn_test_detail(mut cmd: Commands, assets: Res<DetailAssets>) {
         Transform::from_xyz(0.0, 0.6, 0.0),
         CollidingEntities::default(),
         LinearVelocity(Vec3 {
-            // z: 3.0,
+            z: 0.1,
             ..Default::default()
         }),
     );
@@ -95,20 +95,20 @@ pub struct DetailAssets {
 
 pub type RegisterIndex = u16;
 
-#[derive(Component, Reflect, Default)]
-pub struct Slot(pub RegisterIndex);
+#[derive(Component, Reflect, Deref, DerefMut, Clone, Copy)]
+pub struct RegisterPosition(pub RegisterIndex);
 
 #[derive(Default, Clone)]
 pub struct DetailState {
-    bits: BitArr!(for 32, in u32),
-    bits_set: BitArr!(for 32, in u32),
+    state_bits: BitArr!(for 32, in u8),
+    bits_set: BitArr!(for 32, in u8),
 }
 impl DetailState {
     pub fn get_bit(&self, idx: usize) -> Option<bool> {
         if self.bits_set[idx] {
             return None;
         }
-        Some(self.bits[idx])
+        Some(self.state_bits[idx])
     }
 }
 
