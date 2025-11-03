@@ -7,16 +7,24 @@ use bevy_inspector_egui::{
 };
 use bitvec::prelude::BitVec;
 
-use crate::io::{DioPin, IOStore, Io, IoDevices, NodeId, UIOveride};
+use crate::{
+    io::{DioPin, IOStore, Io, IoDevices, NodeId, UIOveride},
+    shiftreg::Register,
+};
 pub struct UIPlugin;
 
 impl Plugin for UIPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(EguiPrimaryContextPass, dio_ui);
+        app.add_systems(EguiPrimaryContextPass, monitor_state);
     }
 }
 
-fn dio_ui(mut cmd: Commands, mut contexts: EguiContexts, mut io: ResMut<IoDevices>) -> Result {
+fn monitor_state(
+    mut cmd: Commands,
+    mut contexts: EguiContexts,
+    mut io: ResMut<IoDevices>,
+    mut reg: ResMut<Register>,
+) -> Result {
     egui::Window::new("IO Devices")
         .scroll([true, true])
         .show(contexts.ctx_mut()?, |ui| {
@@ -26,6 +34,28 @@ fn dio_ui(mut cmd: Commands, mut contexts: EguiContexts, mut io: ResMut<IoDevice
             io_widget(&mut cmd, ui, &mut io.digital_inputs, "input", Io::Input);
             ui.label("Digital Outputs");
             io_widget(&mut cmd, ui, &mut io.digital_outputs, "output", Io::Output);
+            // ui.label("Shift Register");
+            ui.collapsing("DetailRegister", |ui| {
+                egui::Grid::new("Shift reg grid").show(ui, |ui| {
+                    for head in ["pos", "Op1", "Op2", "Op3", "Op4"] {
+                        ui.label(head);
+                    }
+                    for (i, detail) in reg.details.iter().enumerate() {
+                        ui.label(format!("{i}"));
+                        if let Some(detail) = detail {
+                            for bit in (0..4).map(|i| detail.get_bit(i)) {
+                                let msg = match bit {
+                                    Some(true) => "Ok",
+                                    Some(false) => "Failed",
+                                    None => "Not Done",
+                                };
+                                ui.label(msg);
+                            }
+                        }
+                        ui.end_row();
+                    }
+                });
+            });
         });
     Ok(())
 }
