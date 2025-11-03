@@ -15,8 +15,14 @@ const PI2: f32 = PI / 2.0;
 const PLAYER_SPEED: f32 = 1000.0;
 
 fn spawn_camera(mut cmd: Commands) {
-    let mut position = Vec3::default();
-    position.z = 50.0;
+    // let mut position = Vec3::default();
+    //
+    // position.z = 50.0;
+    let position = Vec3 {
+        x: 2.0,
+        y: 1.5,
+        z: 30.0,
+    };
     cmd.spawn((
         Camera3d::default(),
         Player,
@@ -35,22 +41,27 @@ fn spawn_map(
     mut material_assets: ResMut<Assets<StandardMaterial>>,
 ) {
     let ball_mesh = mesh_assets.add(Sphere::new(1.0));
-    for h in 0..6 {
-        let color = Color::hsl((h as f32 / 6.0) * 360.0, 1.0, 0.5);
-        let ball_material = material_assets.add(StandardMaterial {
-            base_color: color,
-            ..Default::default()
-        });
-        let x = -8.0 + h as f32;
+    let balls: Vec<_> = (0..6)
+        .map(|h| {
+            let color = Color::hsl((h as f32 / 6.0) * 360.0, 1.0, 0.5);
+            let ball_material = material_assets.add(StandardMaterial {
+                base_color: color,
+                ..Default::default()
+            });
+            let x = -8.0 + h as f32;
 
-        let transform = Transform::from_translation(Vec3::new(x, 10.0, 0.0));
-        cmd.spawn((
-            Name::new("DummyBall"),
-            transform,
-            Mesh3d(ball_mesh.clone()),
-            MeshMaterial3d(ball_material),
-        ));
-    }
+            let transform = Transform::from_translation(Vec3::new(x, 10.0, 0.0));
+            cmd.spawn((
+                Name::new("DummyBall"),
+                transform,
+                Mesh3d(ball_mesh.clone()),
+                MeshMaterial3d(ball_material),
+            ))
+            .id()
+        })
+        .collect();
+    cmd.spawn((Name::new("balls"), Transform::default()))
+        .add_children(&balls);
 }
 
 fn player_look(

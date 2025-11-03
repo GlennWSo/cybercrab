@@ -11,7 +11,7 @@ impl Plugin for ShiftRegPlugin {
         app.register_type::<RegisterPosition>();
         app.register_type::<Register>();
         app.init_resource::<DetailAssets>();
-        app.insert_resource(Register::new(10));
+        app.insert_resource(Register::new(50));
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
         app.add_systems(Startup, spawn_test_detail.in_set(InitSet::Spawn));
         app.add_systems(Update, animate_test_detail);
@@ -115,7 +115,7 @@ pub struct DetailState {
 }
 impl DetailState {
     pub fn get_bit(&self, idx: usize) -> Option<bool> {
-        if self.bits_set[idx] {
+        if !self.bits_set[idx] {
             return None;
         }
         Some(self.state_bits[idx])

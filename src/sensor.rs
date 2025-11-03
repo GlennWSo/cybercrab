@@ -19,7 +19,6 @@ pub fn on_sensor_switch(
     let Ok(&position) = sensors.get(entity) else {
         return;
     };
-    dbg!("yay");
     cmd.trigger(PositionReached { entity, position })
 }
 

@@ -191,7 +191,6 @@ fn request_push(
         }
     });
     for (from, to) in filter_map {
-        dbg!(from, to);
         writer.write(PushRequest { from, to });
     }
 }
@@ -290,10 +289,8 @@ fn set_tbana_ready(
         .filter(|(state, _)| (state.as_ref()) == &TransportState::NotReady)
     {
         if reg.details[index.0 as usize].is_some() {
-            eprintln!("setting ready send on:{:?}", index.0);
             *state = TransportState::ReadySend;
         } else {
-            eprintln!("setting ready recive on:{:?}", index.0);
             *state = TransportState::ReadyRecive;
         }
     }
