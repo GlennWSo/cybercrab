@@ -2,7 +2,6 @@ use std::borrow::Cow;
 
 use avian3d::prelude::{Collider, CollidingEntities, CollisionLayers, LinearVelocity};
 use bevy::color::palettes::css;
-use bevy::log::tracing::Instrument;
 use bevy::prelude::{Mesh3d, *};
 
 use crate::fotocell::{
@@ -10,7 +9,8 @@ use crate::fotocell::{
 };
 use crate::io::{Dio, DioPin, IoDevices, NodeId, Switch};
 use crate::physics::PhysLayer;
-use crate::shiftreg::RegisterPosition;
+use crate::sensor::{PositionReached, SensorPosition};
+use crate::shiftreg::{Register, RegisterPosition, ShiftOver};
 use crate::sysorder::InitSet;
 
 pub struct TbanaPlugin;
@@ -23,9 +23,20 @@ impl Plugin for TbanaPlugin {
         app.register_type::<PullFrom>();
         app.register_type::<Giver>();
         app.register_type::<Movimot>();
+        app.add_message::<PushRequest>();
         app.init_resource::<TBanaAssets>();
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
-        app.add_systems(Update, (motor_effect, tbana_motor_logic, tbana_ready));
+        app.add_systems(
+            Update,
+            (
+                motor_effect,
+                // tbana_motor_logic,
+                push_request_handler,
+                request_push,
+                stop_pushing,
+                set_tbana_ready,
+            ),
+        );
         app.add_observer(on_insert_tbana);
     }
 }
@@ -46,11 +57,11 @@ fn tbana_motor_logic(
 
         let motors = children.iter().filter_map(|id| motors.get(id).ok());
         for motor in motors {
-            io.set_output_bit(motor.dq.forward.address, motor.dq.forward.pin, false);
-            io.set_output_bit(motor.dq.reverse.address, motor.dq.reverse.pin, false);
+            io.set_output_bit(motor.dq.forward.node, motor.dq.forward.pin, false);
+            io.set_output_bit(motor.dq.reverse.node, motor.dq.reverse.pin, false);
             let (address, pin) = match direction {
-                Direction::Forward => (motor.dq.forward.address, motor.dq.forward.pin),
-                Direction::Reverse => (motor.dq.reverse.address, motor.dq.reverse.pin),
+                Direction::Forward => (motor.dq.forward.node, motor.dq.forward.pin),
+                Direction::Reverse => (motor.dq.reverse.node, motor.dq.reverse.pin),
             };
             io.set_output_bit(address, pin, run);
         }
@@ -114,25 +125,177 @@ impl InsertTbana4x2 {
     }
 }
 
-fn tbana_ready(
-    tbanor: Query<(&mut Readiness, &Children), With<TransportBana>>,
-    sensors: Query<(&NodeId, &DioPin), (With<Switch>, Without<TransportBana>)>,
+fn stop_pushing(
+    mut cmd: Commands,
+    pushers: Query<(Entity, &PushTo, &TransportState, &Children), Without<SensorPosition>>,
+    sensors: Query<(&NodeId, &DioPin), (With<SensorPosition>, With<Switch>)>,
     io: Res<IoDevices>,
 ) {
-    for (mut tbana, children) in tbanor {
-        let sensors = children
-            .iter()
-            .filter_map(|entity| sensors.get(entity).ok());
-        let count = sensors
-            .filter(|(node, pin)| io.get_input_bit(**node, **pin).unwrap())
-            .count();
-        let ready = match count {
-            0 => Readiness::Ready { has_detail: false },
-            4 => Readiness::Ready { has_detail: true },
-            1..=3 => Readiness::Busy,
-            _ => todo!(),
+    let filter = pushers
+        .iter()
+        .filter(|(.., state, _)| **state == TransportState::Sending)
+        .filter_map(|(pusher, to, _, children)| {
+            if children
+                .iter()
+                .filter_map(|child| sensors.get(child).ok())
+                .filter_map(|(node, pin)| io.get_input_bit(*node, *pin))
+                .any(|switch| switch)
+            {
+                None
+            } else {
+                Some((pusher, to.0))
+            }
+        });
+
+    for (pusher, reciver) in filter {
+        cmd.trigger(StopRunning(pusher));
+        cmd.trigger(ShiftOver {
+            from: pusher,
+            to: reciver,
+        });
+    }
+}
+
+fn on_sensor_pos(
+    mut trigger: On<PositionReached>,
+    mut cmd: Commands,
+    directions: Query<(&Direction, &TransportState)>,
+) {
+    let Ok((bana_dir, &state)) = directions.get(trigger.entity) else {
+        return;
+    };
+    if !(state == TransportState::Reciving) {
+        return;
+    }
+
+    trigger.propagate(false);
+    let entity = trigger.entity;
+    match (bana_dir, trigger.position) {
+        (Direction::Forward, SensorPosition::LimitFront) => cmd.trigger((StopRunning(entity))),
+        (Direction::Reverse, SensorPosition::LimitBack) => cmd.trigger(StopRunning(entity)),
+        // (Direction::Reverse, SensorPosition::ProximityBack) => todo!(),
+        // (Direction::Forward, SensorPosition::ProximityFront) => todo!(),
+        _ => (),
+    }
+}
+
+fn request_push(
+    pushers: Query<(Entity, &PushTo, &TransportState)>,
+    mut writer: MessageWriter<PushRequest>,
+) {
+    let filter_map = pushers.iter().filter_map(|(from, pushto, state)| {
+        if state == &TransportState::ReadySend {
+            Some((from, pushto.0))
+        } else {
+            None
+        }
+    });
+    for (from, to) in filter_map {
+        dbg!(from, to);
+        writer.write(PushRequest { from, to });
+    }
+}
+
+fn push_request_handler(
+    mut push_requests: MessageReader<PushRequest>,
+    q: Query<&TransportState>,
+    mut cmd: Commands,
+) {
+    for push in push_requests.read() {
+        let Ok(_) = q.get(push.from) else {
+            continue;
         };
-        *tbana = ready;
+        let Ok(reciver_state) = q.get(push.to) else {
+            continue;
+        };
+        if !(reciver_state == &TransportState::ReadyRecive) {
+            continue;
+        }
+        cmd.trigger(StartSending { entity: push.from });
+        cmd.trigger(StartRecive(push.to));
+    }
+}
+
+fn on_start_sending(
+    trigger: On<StartSending>,
+    mut banor: Query<(&mut TransportState, &Children, &Direction), Without<Movimot>>,
+    motors: Query<&Movimot>,
+    mut io: ResMut<IoDevices>,
+) {
+    let Ok((mut state, children, direction)) = banor.get_mut(trigger.entity) else {
+        return;
+    };
+    *state = TransportState::Sending;
+    for motor in children.iter().filter_map(|e| motors.get(e).ok()) {
+        let dio = match direction {
+            Direction::Forward => motor.dq.forward,
+            Direction::Reverse => motor.dq.reverse,
+        };
+        io.set_output_bit(dio.node, dio.pin, true);
+    }
+}
+fn on_start_reciving(
+    trigger: On<StartRecive>,
+    mut banor: Query<(&mut TransportState, &Children, &Direction), Without<Movimot>>,
+    motors: Query<&Movimot>,
+    mut io: ResMut<IoDevices>,
+) {
+    let Ok((mut state, children, direction)) = banor.get_mut(trigger.0) else {
+        return;
+    };
+    *state = TransportState::Reciving;
+    for motor in children.iter().filter_map(|e| motors.get(e).ok()) {
+        let dio = match direction {
+            Direction::Forward => motor.dq.forward,
+            Direction::Reverse => motor.dq.reverse,
+        };
+        io.set_output_bit(dio.node, dio.pin, true);
+    }
+}
+
+fn on_stop_running_tbana(
+    trigger: On<StopRunning>,
+    mut banor: Query<(&mut TransportState, &Children)>,
+    mut cmd: Commands,
+) {
+    let Ok((mut state, children)) = banor.get_mut(trigger.0) else {
+        return;
+    };
+    *state = TransportState::NotReady;
+    for child in children {
+        cmd.trigger(StopRunning(*child));
+    }
+}
+
+fn on_stop_running_motor(
+    trigger: On<StopRunning>,
+    motors: Query<&Movimot>,
+    mut io: ResMut<IoDevices>,
+) {
+    let Ok(motor) = motors.get(trigger.0) else {
+        return;
+    };
+    let dios = [motor.dq.forward, motor.dq.reverse];
+    for Dio { node, pin } in dios.into_iter() {
+        io.set_output_bit(node, pin, false);
+    }
+}
+
+fn set_tbana_ready(
+    mut tbana: Query<(&mut TransportState, &RegisterPosition), With<NoProcess>>,
+    reg: Res<Register>,
+) {
+    for (mut state, index) in tbana
+        .iter_mut()
+        .filter(|(state, _)| (state.as_ref()) == &TransportState::NotReady)
+    {
+        if reg.details[index.0 as usize].is_some() {
+            eprintln!("setting ready send on:{:?}", index.0);
+            *state = TransportState::ReadySend;
+        } else {
+            eprintln!("setting ready recive on:{:?}", index.0);
+            *state = TransportState::ReadyRecive;
+        }
     }
 }
 
@@ -145,14 +308,14 @@ fn motor_effect(
         let motors = colliding.iter().filter_map(|id| motors.get(*id).ok());
         let speeds: Vec<_> = motors
             .map(|(motor, transform)| {
-                let fw_node = motor.dq.forward.address;
+                let fw_node = motor.dq.forward.node;
                 let fw_pin = motor.dq.forward.pin;
-                let rev_node = motor.dq.reverse.address;
+                let rev_node = motor.dq.reverse.node;
                 let rev_pin = motor.dq.reverse.pin;
                 let fw = io.get_output_bit(fw_node, fw_pin);
-                let rev = io.get_output_bit(motor.dq.reverse.address, motor.dq.reverse.pin);
+                let rev = io.get_output_bit(motor.dq.reverse.node, motor.dq.reverse.pin);
                 let rapid =
-                    io.get_output_bit(motor.dq.rapid.address, motor.dq.rapid.pin) == Some(true);
+                    io.get_output_bit(motor.dq.rapid.node, motor.dq.rapid.pin) == Some(true);
                 let speed = if rapid {
                     motor.fast_speed
                 } else {
@@ -194,13 +357,20 @@ fn on_insert_tbana(
     tbana_assets: Res<TBanaAssets>,
 ) {
     let z_values = [-0.9, -0.7, 0.7, 0.9];
-    let fc_names = ["forward_end", "forward_slow", "reverse_slow", "reverse_end"];
+    let fc_names = ["back_end", "back_slow", "fron_slow", "front_end"];
+    let fc_roles = [
+        SensorPosition::LimitBack,
+        SensorPosition::ProximityBack,
+        SensorPosition::ProximityFront,
+        SensorPosition::LimitFront,
+    ];
     let io_inputs = spawn.io_inputs.iter();
     let phys_layers = CollisionLayers::new(PhysLayer::Sensor, PhysLayer::Detail);
     let fotocells: Vec<_> = io_inputs
         .zip(z_values)
         .zip(fc_names)
-        .map(|((dio, z), name)| {
+        .zip(fc_roles)
+        .map(|(((dio, z), name), role)| {
             let coord = Vec3 {
                 x: 0.45,
                 y: 0.53,
@@ -208,8 +378,8 @@ fn on_insert_tbana(
             };
             let mut transform = Transform::from_translation(coord);
             transform.rotate_local_y(-90_f32.to_radians());
-            let fotocell = FotocellBundle::new(name, dio.pin, &fotocell_assets, dio.address, 0.8);
-            cmd.spawn((fotocell, transform, phys_layers))
+            let fotocell = FotocellBundle::new(name, dio.pin, &fotocell_assets, dio.node, 0.8);
+            cmd.spawn((fotocell, transform, phys_layers, role))
                 .observe(on_fotocell_blocked)
                 .observe(on_fotocell_unblocked)
                 .id()
@@ -235,7 +405,9 @@ fn on_insert_tbana(
             );
             let mut transform = Transform::from_xyz(0.0, 0.45, z);
             transform.rotate_local_y(90_f32.to_radians());
-            cmd.spawn((bundle, transform, phys_layers)).id()
+            cmd.spawn((bundle, transform, phys_layers))
+                .observe(on_stop_running_motor)
+                .id()
         })
         .collect();
 
@@ -246,20 +418,24 @@ fn on_insert_tbana(
         spawn.direction,
         spawn.register_pos,
     );
-    match spawn.parrent {
-        Some(parrent) => {
-            cmd.entity(spawn.entity)
-                .insert((bana_bundle, ChildOf(parrent)))
-                .add_children(&fotocells[0..4])
-                .add_children(&motors_wheels[0..2]);
-        }
-        None => {
-            cmd.entity(spawn.entity)
-                .insert(bana_bundle)
-                .add_children(&fotocells[0..4])
-                .add_children(&motors_wheels[0..2]);
-        }
-    };
+
+    let mut tbana = cmd.entity(spawn.entity);
+    tbana
+        .insert(bana_bundle)
+        .add_children(&fotocells[0..4])
+        .add_children(&motors_wheels[0..2])
+        .observe(on_stop_running_tbana)
+        .observe(on_start_reciving)
+        .observe(on_sensor_pos)
+        .observe(on_start_sending);
+
+    if let Some(parrent) = spawn.parrent {
+        tbana.insert(ChildOf(parrent));
+    }
+
+    if let Some(pushto) = spawn.push_to {
+        tbana.insert(pushto);
+    }
 }
 
 pub fn load_assets(
@@ -326,7 +502,8 @@ pub struct TbanaBundle {
     pub mesh: Mesh3d,
     pub material: MeshMaterial3d<StandardMaterial>,
     pub mode: Mode,
-    pub ready: Readiness,
+    pub ready: TransportState,
+    simple: NoProcess,
 }
 
 impl TbanaBundle {
@@ -338,6 +515,7 @@ impl TbanaBundle {
             material: MeshMaterial3d(tbana_assets.bana_materials.ready.clone()),
             mode: default(),
             ready: default(),
+            simple: NoProcess,
         }
     }
 }
@@ -373,16 +551,16 @@ impl MovimotDQ {
     pub fn new(address: u32, fw: u16, rev: u16, rapid: u16) -> Self {
         let address = NodeId(address);
         let forward = Dio {
-            address,
+            node: address,
             pin: DioPin(fw),
         };
         let reverse = Dio {
-            address,
+            node: address,
             pin: DioPin(rev),
         };
 
         let rapid = Dio {
-            address,
+            node: address,
             pin: DioPin(rapid),
         };
 
@@ -429,15 +607,40 @@ impl TransportWheelBundle {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy, Reflect, Default)]
-pub enum Readiness {
+#[derive(Component, Debug, Clone, Copy, Reflect, Default, PartialEq, Eq)]
+pub enum RunState {
+    Ready,
+    Running,
     #[default]
-    Busy,
     Disabled,
-    Ready {
-        has_detail: bool,
-    },
 }
+
+#[derive(Component, Debug, Clone, Copy, Reflect, Default, PartialEq, Eq)]
+pub enum TransportState {
+    ReadySend,
+    Sending,
+    ReadyRecive,
+    Reciving,
+    #[default]
+    NotReady,
+}
+
+#[derive(Message)]
+pub struct PushRequest {
+    pub from: Entity,
+    pub to: Entity,
+}
+
+#[derive(EntityEvent)]
+pub struct StartSending {
+    pub entity: Entity,
+}
+
+#[derive(EntityEvent)]
+pub struct StartRecive(pub Entity);
+
+#[derive(EntityEvent)]
+pub struct StopRunning(pub Entity);
 
 #[derive(Component, Debug, Clone, Copy, Reflect, Default)]
 pub enum Mode {
@@ -446,7 +649,7 @@ pub enum Mode {
     Pull,
 }
 
-#[derive(Component, Reflect, Clone, Copy)]
+#[derive(Component, Reflect, Clone, Copy, Deref)]
 #[relationship(relationship_target = Reciver )]
 /// Pushes production details to other
 pub struct PushTo(pub Entity);
@@ -462,3 +665,8 @@ pub struct PullFrom(pub Entity);
 #[derive(Component, Reflect)]
 #[relationship_target(relationship=PullFrom)]
 pub struct Giver(Vec<Entity>);
+
+#[derive(Component)]
+/// Mark station as place where the product is *not* worked on
+/// for example a buffer place or transportation station
+pub struct NoProcess;

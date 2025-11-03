@@ -46,11 +46,9 @@ impl Plugin for DummyPlugin {
 fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
     let n_banor = 8;
     let io_size = 8 * n_banor;
-    let device_address: NodeId = 0.into();
-    io.digital_inputs
-        .insert(device_address, IOStore::new(io_size));
-    io.digital_outputs
-        .insert(device_address, IOStore::new(io_size));
+    let node: NodeId = 0.into();
+    io.digital_inputs.insert(node, IOStore::new(io_size));
+    io.digital_outputs.insert(node, IOStore::new(io_size));
 
     let mut translation = Vec3::default();
 
@@ -59,22 +57,16 @@ fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
     let new_enitities: Vec<_> = (0..=n_banor).map(|i| cmd.spawn_empty().id()).collect();
 
     for (i, entity) in new_enitities.iter().enumerate() {
-        let inputs = io.digital_inputs.get_mut(&device_address).unwrap();
+        let inputs = io.digital_inputs.get_mut(&node).unwrap();
         let inputs = inputs
             .take(4)
-            .map(|pin| Dio {
-                address: device_address,
-                pin,
-            })
+            .map(|pin| Dio { node, pin })
             .collect_array()
             .unwrap();
-        let outputs = io.digital_outputs.get_mut(&device_address).unwrap();
+        let outputs = io.digital_outputs.get_mut(&node).unwrap();
         let outputs = outputs
             .take(6)
-            .map(|pin| Dio {
-                address: device_address,
-                pin,
-            })
+            .map(|pin| Dio { node, pin })
             .collect_array()
             .unwrap();
 

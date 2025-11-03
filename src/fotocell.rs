@@ -6,6 +6,7 @@ use bevy::{color::palettes::css, prelude::*};
 
 use crate::{
     io::{DioPin, Io, IoDevices, NodeId, Switch, SwitchSet},
+    sensor::{on_sensor_switch, SensorPosition},
     sysorder::InitSet,
 };
 
@@ -16,6 +17,8 @@ impl Plugin for FotocellPlugin {
         app.init_resource::<FotocellAssets>();
         app.init_gizmo_group::<DetectorGizmos>();
         app.add_systems(Startup, load_fotocell_assets.in_set(InitSet::LoadAssets));
+        app.add_observer(on_sensor_switch);
+        app.register_type::<SensorPosition>();
         app.add_systems(Update, render_fotocell_detector);
     }
 }

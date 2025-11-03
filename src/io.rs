@@ -43,7 +43,7 @@ impl DIOModule {
 
         *is_free = false;
         Some(Dio {
-            address: self.address,
+            node: self.address,
             pin: DioPin(pin_idx as u16),
         })
     }
@@ -155,7 +155,7 @@ pub struct UIOveride {
 
 #[derive(Bundle, Reflect, Clone, Copy, Debug)]
 pub struct Dio {
-    pub address: NodeId,
+    pub node: NodeId,
     pub pin: DioPin,
 }
 

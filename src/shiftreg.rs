@@ -9,11 +9,13 @@ pub struct ShiftRegPlugin;
 impl Plugin for ShiftRegPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<RegisterPosition>();
+        app.register_type::<Register>();
         app.init_resource::<DetailAssets>();
         app.insert_resource(Register::new(10));
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
         app.add_systems(Startup, spawn_test_detail.in_set(InitSet::Spawn));
         app.add_systems(Update, animate_test_detail);
+        app.add_observer(on_shift_over);
     }
 }
 
@@ -95,12 +97,20 @@ pub struct DetailAssets {
 
 pub type RegisterIndex = u16;
 
-#[derive(Component, Reflect, Deref, DerefMut, Clone, Copy)]
+#[derive(Component, Reflect, Deref, DerefMut, Clone, Copy, Debug)]
 pub struct RegisterPosition(pub RegisterIndex);
 
-#[derive(Default, Clone)]
+impl RegisterPosition {
+    pub fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
+}
+
+#[derive(Default, Clone, Reflect, Debug)]
 pub struct DetailState {
+    #[reflect(ignore)]
     state_bits: BitArr!(for 32, in u8),
+    #[reflect(ignore)]
     bits_set: BitArr!(for 32, in u8),
 }
 impl DetailState {
@@ -112,9 +122,31 @@ impl DetailState {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Reflect, Debug)]
+#[reflect(Resource)]
 pub struct Register {
-    details: Vec<Option<DetailState>>,
+    pub details: Vec<Option<DetailState>>,
+}
+
+#[derive(Event)]
+pub struct ShiftOver {
+    pub from: Entity,
+    pub to: Entity,
+}
+
+fn on_shift_over(trigger: On<ShiftOver>, q: Query<&RegisterPosition>, mut reg: ResMut<Register>) {
+    let Ok([from, to]) = q.get_many([trigger.from, trigger.to]) else {
+        return;
+    };
+    let Some(detail) = reg.details[from.as_usize()].take() else {
+        return;
+    };
+    let to_state = &mut reg.details[to.as_usize()];
+    if to_state.is_some() {
+        panic!("cant shift part to occuipeid pos");
+        // return;
+    }
+    *to_state = Some(detail);
 }
 
 impl Register {
