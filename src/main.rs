@@ -14,6 +14,10 @@ use cybercrab::{DummyPlugin, InitSet};
 const PI2: f32 = PI / 2.0;
 const PLAYER_SPEED: f32 = 1000.0;
 
+fn configure_lights(mut ambient_light: ResMut<AmbientLight>) {
+    ambient_light.brightness = 130.0;
+}
+
 fn spawn_camera(mut cmd: Commands) {
     // let mut position = Vec3::default();
     //
@@ -195,7 +199,10 @@ fn main() {
     app.add_plugins(EguiPlugin::default());
     app.add_plugins(WorldInspectorPlugin::new());
 
-    app.add_systems(Startup, (spawn_camera, spawn_map).in_set(InitSet::Spawn));
+    app.add_systems(
+        Startup,
+        (spawn_camera, spawn_map, configure_lights).in_set(InitSet::Spawn),
+    );
     app.add_systems(Update, (player_look, player_move).chain());
     app.add_systems(
         Update,
