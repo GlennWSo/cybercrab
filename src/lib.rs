@@ -44,7 +44,7 @@ impl Plugin for DummyPlugin {
 }
 
 fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
-    let n_banor = 30;
+    let n_banor = 4;
     let io_size = 8 * n_banor;
     let node: NodeId = 0.into();
     io.digital_inputs.insert(node, IOStore::new(io_size));

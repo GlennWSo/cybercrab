@@ -38,6 +38,49 @@ impl Plugin for TbanaPlugin {
             ),
         );
         app.add_observer(on_insert_tbana);
+        app.add_observer(on_switch_tbana_direction);
+    }
+}
+
+#[derive(Event)]
+pub struct SwitchDirection;
+
+fn on_switch_tbana_direction(
+    trigger: On<SwitchDirection>,
+    mut cmd: Commands,
+    mut tbanor: Query<(
+        Entity,
+        &mut Direction,
+        &mut TransportState,
+        &PushTo,
+        &RegisterPosition,
+    )>,
+    reg: Res<Register>,
+) {
+    for (me, mut dir, mut state, pushto, pos) in tbanor.iter_mut() {
+        match *dir.as_ref() {
+            Direction::Forward => *dir = Direction::Reverse,
+            Direction::Reverse => *dir = Direction::Forward,
+        }
+        // cmd.entity(ent).clear_related::<PushTo>();
+        let push_to = pushto.0;
+        cmd.entity(push_to).remove_related::<PushTo>(&[me]);
+        cmd.entity(me).add_related::<PushTo>(&[push_to]);
+        // cmd.entity(from).
+        match *state.as_ref() {
+            TransportState::Reciving => {
+                *state = TransportState::ReadySend;
+            }
+            TransportState::Sending => {
+                cmd.trigger(ShiftOver {
+                    from: me,
+                    to: push_to,
+                });
+                cmd.trigger(StartRecive(me));
+                cmd.trigger(StartSending { entity: push_to });
+            }
+            _ => (),
+        }
     }
 }
 
@@ -135,12 +178,12 @@ fn stop_pushing(
         .iter()
         .filter(|(.., state, _)| **state == TransportState::Sending)
         .filter_map(|(pusher, to, _, children)| {
-            if children
+            let any_pos_sensor_active = children
                 .iter()
                 .filter_map(|child| sensors.get(child).ok())
                 .filter_map(|(node, pin)| io.get_input_bit(*node, *pin))
-                .any(|switch| switch)
-            {
+                .any(|switch| switch);
+            if any_pos_sensor_active {
                 None
             } else {
                 Some((pusher, to.0))
@@ -226,11 +269,12 @@ fn on_start_sending(
     };
     *state = TransportState::Sending;
     for motor in children.iter().filter_map(|e| motors.get(e).ok()) {
-        let dio = match direction {
-            Direction::Forward => motor.dq.forward,
-            Direction::Reverse => motor.dq.reverse,
+        let (dio_set, dio_reset) = match direction {
+            Direction::Forward => (motor.dq.forward, motor.dq.reverse),
+            Direction::Reverse => (motor.dq.reverse, motor.dq.forward),
         };
-        io.set_output_bit(dio.node, dio.pin, true);
+        io.set_output_bit(dio_set.node, dio_set.pin, true);
+        io.set_output_bit(dio_reset.node, dio_reset.pin, false);
     }
 }
 fn on_start_reciving(
@@ -244,11 +288,12 @@ fn on_start_reciving(
     };
     *state = TransportState::Reciving;
     for motor in children.iter().filter_map(|e| motors.get(e).ok()) {
-        let dio = match direction {
-            Direction::Forward => motor.dq.forward,
-            Direction::Reverse => motor.dq.reverse,
+        let (dio_set, dio_reset) = match direction {
+            Direction::Forward => (motor.dq.forward, motor.dq.reverse),
+            Direction::Reverse => (motor.dq.reverse, motor.dq.forward),
         };
-        io.set_output_bit(dio.node, dio.pin, true);
+        io.set_output_bit(dio_set.node, dio_set.pin, true);
+        io.set_output_bit(dio_reset.node, dio_reset.pin, false);
     }
 }
 

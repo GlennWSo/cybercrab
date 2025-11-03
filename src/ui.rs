@@ -6,10 +6,12 @@ use bevy_inspector_egui::{
     egui::WidgetText,
 };
 use bitvec::prelude::BitVec;
+use itertools::Itertools;
 
 use crate::{
     io::{DioPin, IOStore, Io, IoDevices, NodeId, UIOveride},
-    shiftreg::Register,
+    shiftreg::{Register, RegisterPosition},
+    tbana::{SwitchDirection, TransportState},
 };
 pub struct UIPlugin;
 
@@ -23,13 +25,17 @@ fn monitor_state(
     mut cmd: Commands,
     mut contexts: EguiContexts,
     mut io: ResMut<IoDevices>,
-    mut reg: ResMut<Register>,
+    banor: Query<(&TransportState, &RegisterPosition)>,
+    reg: ResMut<Register>,
 ) -> Result {
     egui::Window::new("IO Devices")
         .scroll([true, true])
         .show(contexts.ctx_mut()?, |ui| {
             // egui::ScrollArea::vertical().show(ui, |ui| {});
 
+            if ui.button("flip").clicked() {
+                cmd.trigger(SwitchDirection);
+            }
             ui.label("Digital Inputs");
             io_widget(&mut cmd, ui, &mut io.digital_inputs, "input", Io::Input);
             ui.label("Digital Outputs");
@@ -37,11 +43,21 @@ fn monitor_state(
             // ui.label("Shift Register");
             ui.collapsing("DetailRegister", |ui| {
                 egui::Grid::new("Shift reg grid").show(ui, |ui| {
-                    for head in ["pos", "Op1", "Op2", "Op3", "Op4"] {
+                    let banor: Vec<_> = banor.iter().collect();
+                    for head in ["pos", "state", "Op1", "Op2", "Op3", "Op4"] {
                         ui.label(head);
                     }
+                    ui.end_row();
                     for (i, detail) in reg.details.iter().enumerate() {
                         ui.label(format!("{i}"));
+                        let state = banor.iter().find_map(|(state, pos)| {
+                            if pos.as_usize() == i {
+                                Some(**state)
+                            } else {
+                                None
+                            }
+                        });
+                        ui.label(format!("{:?}", state));
                         if let Some(detail) = detail {
                             for bit in (0..4).map(|i| detail.get_bit(i)) {
                                 let msg = match bit {
