@@ -14,20 +14,15 @@ use itertools::Itertools;
 pub use sysorder::InitSet;
 pub use tbana::TbanaPlugin;
 
-use tbana::TbanaBundle;
-
 use crate::{
-    fotocell::{
-        on_fotocell_blocked, on_fotocell_unblocked, FotocellAssets, FotocellBundle, FotocellPlugin,
-    },
-    io::{on_parrent_switch, Dio, DioPin, IOStore, IoDevices, IoPlugin, NodeId},
+    fotocell::FotocellPlugin,
+    io::{Dio, IOStore, IoDevices, IoPlugin, NodeId},
     shiftreg::{RegisterPosition, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
-    tbana::{Direction, InsertTbana4x2, MovimotDQ, PushTo, TBanaAssets, TransportWheelBundle},
+    tbana::{Direction, InsertTbana4x2, PushTo},
     ui::UIPlugin,
 };
 
-use bitvec::prelude::*;
 pub struct DummyPlugin;
 
 impl Plugin for DummyPlugin {
@@ -43,6 +38,21 @@ impl Plugin for DummyPlugin {
     }
 }
 
+pub enum SimulationState {
+    Running,
+    Paused,
+}
+
+pub enum ImmersionState {}
+
+pub enum MachineState {
+    Auto,
+    Man { bypass: bool },
+    Standby,
+    EmergancyStop,
+    Ugl,
+}
+
 fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
     let n_banor = 4;
     let io_size = 8 * n_banor;
@@ -54,7 +64,7 @@ fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
 
     let spaceing = 2.1;
 
-    let new_enitities: Vec<_> = (0..=n_banor).map(|i| cmd.spawn_empty().id()).collect();
+    let new_enitities: Vec<_> = (0..n_banor).map(|_| cmd.spawn_empty().id()).collect();
 
     for (i, entity) in new_enitities.iter().enumerate() {
         let inputs = io.digital_inputs.get_mut(&node).unwrap();
