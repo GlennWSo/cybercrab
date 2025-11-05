@@ -590,7 +590,7 @@ pub struct MovimotDQ {
 
 impl MovimotDQ {
     #[allow(dead_code)]
-    pub fn new(address: u32, fw: u16, rev: u16, rapid: u16) -> Self {
+    pub fn new(address: u32, fw: u8, rev: u8, rapid: u8) -> Self {
         let address = NodeId(address);
         let forward = Dio {
             node: address,

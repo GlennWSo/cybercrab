@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+pub mod derp;
 pub mod fotocell;
 pub mod io;
 pub mod physics;

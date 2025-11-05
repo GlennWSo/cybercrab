@@ -1,5 +1,15 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use std::marker::{Send, Sync};
+
+use bevy::{
+    ecs::{
+        component,
+        spawn::{SpawnRelatedBundle, SpawnableList},
+    },
+    platform::collections::HashMap,
+    prelude::*,
+};
 use bitvec::vec::BitVec;
+use itertools::Itertools;
 
 pub struct IoPlugin;
 
@@ -13,12 +23,111 @@ impl Plugin for IoPlugin {
 }
 
 #[derive(Component, Reflect, Default, Hash, PartialEq, Eq, Debug, Clone, Copy, Deref)]
-/// Unique Id of network Device
+#[component(immutable)]
 pub struct NodeId(pub u32);
 
 impl From<u32> for NodeId {
     fn from(value: u32) -> Self {
         Self(value)
+    }
+}
+
+#[derive(Component)]
+pub struct IOBits(pub BitVec<u8>);
+
+impl IOBits {
+    pub fn new(len: usize) -> Self {
+        Self(BitVec::repeat(false, len))
+    }
+}
+
+#[derive(Component)]
+#[relationship(relationship_target=Connections)]
+pub struct ConnectedTo(Entity);
+
+#[derive(Component)]
+#[relationship_target(relationship=ConnectedTo)]
+pub struct Connections(Vec<Entity>);
+
+impl Connections {
+    pub fn new(items: Vec<Entity>) -> Self {
+        Self(items)
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+pub struct Dios {
+    pub node: NodeId,
+    pub pins: Box<[upin]>,
+}
+impl Dios {
+    fn len(&self) -> usize {
+        self.pins.len()
+    }
+}
+
+impl From<&[Dio]> for Dios {
+    fn from(dio_pins: &[Dio]) -> Self {
+        let node = dio_pins
+            .iter()
+            .next()
+            .expect("pins should not be empty")
+            .node;
+        let pins = dio_pins
+            .iter()
+            .map(|dio| {
+                assert!(dio.node == node);
+                dio.pin.0
+            })
+            .collect();
+        Self { node, pins }
+    }
+}
+
+#[derive(Component)]
+pub struct Uses(pub Entity);
+
+pub struct Users(Vec<Entity>);
+
+#[derive(Component)]
+pub struct Inputs;
+
+#[derive(Component)]
+pub struct Outputs;
+
+#[derive(Bundle)]
+pub struct InputBundle {
+    pub connection: Dios,
+    pub bits: IOBits,
+    pub marker: Inputs,
+}
+
+impl InputBundle {
+    pub fn new(dios: Dios) -> Self {
+        let bits = IOBits(BitVec::repeat(false, dios.len()));
+        Self {
+            connection: dios,
+            bits,
+            marker: Inputs,
+        }
+    }
+}
+#[derive(Bundle)]
+pub struct OutputBundle {
+    pub connection: Dios,
+    pub bits: IOBits,
+    pub marker: Outputs,
+}
+
+impl OutputBundle {
+    pub fn new(dios: Dios) -> Self {
+        let bits = IOBits(BitVec::repeat(false, dios.len()));
+        Self {
+            connection: dios,
+            bits,
+            marker: Outputs,
+        }
     }
 }
 
@@ -44,7 +153,7 @@ impl DIOModule {
         *is_free = false;
         Some(Dio {
             node: self.address,
-            pin: DioPin(pin_idx as u16),
+            pin: DioPin(pin_idx as u8),
         })
     }
 }
@@ -84,7 +193,7 @@ impl IOStore {
             return None;
         }
         *is_taken = true;
-        Some(DioPin(idx as u16))
+        Some(DioPin(idx as u8))
     }
 }
 
@@ -118,8 +227,12 @@ impl IoDevices {
     }
 }
 
-#[derive(Component, Reflect, Clone, Copy, Deref, DerefMut, Debug, PartialEq, Eq)]
-pub struct DioPin(pub u16);
+#[allow(non_camel_case_types)]
+pub type upin = u8;
+
+#[derive(Component, Reflect, Clone, Copy, Deref, DerefMut, Debug, PartialEq, Eq, Hash)]
+#[component(immutable)]
+pub struct DioPin(pub upin);
 
 impl DioPin {
     pub const fn as_usize(self) -> usize {
@@ -129,6 +242,9 @@ impl DioPin {
 
 #[derive(Component, Default, Reflect)]
 pub struct Switch;
+
+#[derive(Component, Default, Reflect)]
+pub struct Coil;
 
 #[derive(EntityEvent, Clone, Copy)]
 pub struct SwitchSet {

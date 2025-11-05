@@ -9,7 +9,7 @@ use bitvec::prelude::BitVec;
 use itertools::Itertools;
 
 use crate::{
-    io::{DioPin, IOStore, Io, IoDevices, NodeId, UIOveride},
+    io::{upin, DioPin, IOStore, Io, IoDevices, NodeId, UIOveride},
     shiftreg::{Register, RegisterPosition},
     tbana::{SwitchDirection, TransportState},
 };
@@ -95,7 +95,7 @@ fn io_widget(
                                 if ui.checkbox(&mut bit, format!(".{ix}")).changed() {
                                     cmd.trigger(UIOveride {
                                         address: (address as u32).into(),
-                                        pin: DioPin(ix as u16),
+                                        pin: DioPin(ix as upin),
                                         value: *bit,
                                         kind,
                                     });

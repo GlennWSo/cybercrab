@@ -171,6 +171,12 @@ pub struct Fotocell {
     range: f32,
 }
 
+impl Fotocell {
+    pub fn new(range: f32) -> Self {
+        Self { range }
+    }
+}
+
 // Fotocell,
 // Name::new(format!("fotocell{i}")),
 // IoSlot::new(ptr, io::DataSlice::Bit(idx)),
