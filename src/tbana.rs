@@ -7,7 +7,7 @@ use bevy::prelude::{Mesh3d, *};
 use crate::fotocell::{
     on_fotocell_blocked, on_fotocell_unblocked, Fotocell, FotocellAssets, FotocellBundle,
 };
-use crate::io::{Dio, DioPin, IoDevices, NodeId, Switch};
+use crate::io::{Dio, DioPin, IoDevices, Ip4, Switch};
 use crate::physics::PhysLayer;
 use crate::sensor::{PositionReached, SensorPosition};
 use crate::shiftreg::{Register, RegisterPosition, ShiftOver};
@@ -86,7 +86,7 @@ fn on_switch_tbana_direction(
 
 fn tbana_motor_logic(
     banor: Query<(&Children, &Direction), With<TransportBana>>,
-    sensors: Query<(&DioPin, &NodeId), (With<Fotocell>, Without<TransportBana>, Without<Movimot>)>,
+    sensors: Query<(&DioPin, &Ip4), (With<Fotocell>, Without<TransportBana>, Without<Movimot>)>,
     motors: Query<&Movimot, (Without<TransportBana>, Without<Fotocell>)>,
     mut io: ResMut<IoDevices>,
 ) {
@@ -171,7 +171,7 @@ impl InsertTbana4x2 {
 fn stop_pushing(
     mut cmd: Commands,
     pushers: Query<(Entity, &PushTo, &TransportState, &Children), Without<SensorPosition>>,
-    sensors: Query<(&NodeId, &DioPin), (With<SensorPosition>, With<Switch>)>,
+    sensors: Query<(&Ip4, &DioPin), (With<SensorPosition>, With<Switch>)>,
     io: Res<IoDevices>,
 ) {
     let filter = pushers
@@ -591,7 +591,7 @@ pub struct MovimotDQ {
 impl MovimotDQ {
     #[allow(dead_code)]
     pub fn new(address: u32, fw: u8, rev: u8, rapid: u8) -> Self {
-        let address = NodeId(address);
+        let address = Ip4(address);
         let forward = Dio {
             node: address,
             pin: DioPin(fw),

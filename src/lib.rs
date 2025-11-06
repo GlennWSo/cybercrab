@@ -17,7 +17,7 @@ pub use tbana::TbanaPlugin;
 
 use crate::{
     fotocell::FotocellPlugin,
-    io::{Dio, IOStore, IoDevices, IoPlugin, NodeId},
+    io::{Dio, IOStore, IoDevices, IoPlugin, Ip4},
     shiftreg::{RegisterPosition, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
     tbana::{Direction, InsertTbana4x2, PushTo},
@@ -57,7 +57,7 @@ pub enum MachineState {
 fn spawn_some_stuff(mut cmd: Commands, mut io: ResMut<IoDevices>) {
     let n_banor = 4;
     let io_size = 8 * n_banor;
-    let node: NodeId = 0.into();
+    let node: Ip4 = 0.into();
     io.digital_inputs.insert(node, IOStore::new(io_size));
     io.digital_outputs.insert(node, IOStore::new(io_size));
 

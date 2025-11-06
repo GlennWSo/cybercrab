@@ -5,7 +5,7 @@ use bevy::{color::palettes::css, prelude::*};
 // use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
 use crate::{
-    io::{DioPin, Io, IoDevices, NodeId, Switch, SwitchSet},
+    io::{DioPin, Io, IoDevices, Ip4, Switch, SwitchSet},
     sensor::{on_sensor_switch, SensorPosition},
     sysorder::InitSet,
 };
@@ -80,7 +80,7 @@ struct DetectorGizmos;
 
 fn render_fotocell_detector(
     mut gizmos: Gizmos<DetectorGizmos>,
-    q: Query<(&Fotocell, &GlobalTransform, &NodeId, &DioPin)>,
+    q: Query<(&Fotocell, &GlobalTransform, &Ip4, &DioPin)>,
     devices: Res<IoDevices>,
 ) {
     for (fc, transform, address, pin) in q {
@@ -107,8 +107,6 @@ pub struct FotocellBundle {
     pub fotocell_mark: Fotocell,
     pub switch: Switch,
     pub name: Name,
-    pub device: NodeId,
-    pub io_pin: DioPin,
     pub mesh: Mesh3d,
     material: MeshMaterial3d<StandardMaterial>,
     simbody: RigidBody,
@@ -119,9 +117,7 @@ pub struct FotocellBundle {
 impl FotocellBundle {
     pub fn new(
         name: impl Into<Cow<'static, str>>,
-        io_slot: DioPin,
         fotocell_assets: &FotocellAssets,
-        device: NodeId,
         range: f32,
     ) -> Self {
         let collider = Collider::segment(
@@ -134,8 +130,6 @@ impl FotocellBundle {
         Self {
             fotocell_mark: Fotocell { range },
             name: Name::new(name),
-            io_pin: io_slot,
-            device,
             mesh: Mesh3d(fotocell_assets.emmiter.clone()),
             material: MeshMaterial3d(fotocell_assets.foto_materials.emmiter.clone()),
             switch: default(),

@@ -9,7 +9,7 @@ use bitvec::prelude::BitVec;
 use itertools::Itertools;
 
 use crate::{
-    io::{upin, DioPin, IOStore, Io, IoDevices, NodeId, UIOveride},
+    io::{upin, DioPin, IOStore, Io, IoDevices, Ip4, UIOveride},
     shiftreg::{Register, RegisterPosition},
     tbana::{SwitchDirection, TransportState},
 };
@@ -79,7 +79,7 @@ fn monitor_state(
 fn io_widget(
     cmd: &mut Commands,
     ui: &mut egui::Ui,
-    hash_map: &mut HashMap<NodeId, IOStore>,
+    hash_map: &mut HashMap<Ip4, IOStore>,
     header: &'static str,
     kind: Io,
 ) {
