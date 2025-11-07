@@ -1,4 +1,7 @@
-use std::marker::{Send, Sync};
+use std::{
+    marker::{Send, Sync},
+    num::{NonZero, NonZeroU8},
+};
 
 use bevy::prelude::*;
 use bitvec::vec::BitVec;
@@ -47,13 +50,39 @@ pub struct DqNode {
     address: Ip4,
 }
 
-#[derive(Component)]
+#[derive(Component, Deref, DerefMut, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Reflect)]
+#[component(immutable)]
+/// Gives an enitity a number of pins
+pub struct PinTerminals(pub NonZeroU8);
+
+impl PinTerminals {
+    pub fn new(non_zero: u8) -> Self {
+        Self(NonZero::new(non_zero).unwrap())
+    }
+}
+
+impl Default for PinTerminals {
+    /// One Pin
+    fn default() -> Self {
+        Self(NonZeroU8::MIN)
+    }
+}
+
+#[derive(Component, Copy, Clone, Reflect)]
 #[relationship(relationship_target=InputPins)]
-pub struct InputPinTo(pub Entity);
+pub struct InputPinsTo(pub Entity);
+
+#[derive(Component, Clone, Copy)]
+#[relationship_target(relationship=InputPinsTo)]
+pub struct InputPins(Vec<Entity>);
+
+#[derive(Component, Clone, Copy)]
+#[relationship(relationship_target=OutputPins)]
+pub struct OutputPinsTo(pub Entity);
 
 #[derive(Component)]
-#[relationship_target(relationship=InputPinTo)]
-pub struct InputPins(Vec<Entity>);
+#[relationship_target(relationship=OutputPinsTo)]
+pub struct OutputPins(Vec<Entity>);
 
 #[derive(EntityEvent, Clone, Copy)]
 pub struct SwitchSet {

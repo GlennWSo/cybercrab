@@ -5,7 +5,7 @@ use bevy::{color::palettes::css, prelude::*};
 // use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
 use crate::{
-    io::{DioPin, Io, IoDevices, Ip4, Switch, SwitchSet},
+    io::{DioPin, Io, IoDevices, Ip4, PinTerminals, Switch, SwitchSet},
     sensor::{on_sensor_switch, SensorPosition},
     sysorder::InitSet,
 };
@@ -72,6 +72,7 @@ pub fn on_fotocell_unblocked(trigger: On<CollisionEnd>, mut cmd: Commands) {
         entity: trigger.event_target(),
         closed: false,
         kind: Io::Input,
+        PhysicsInterpolationPlugin,
     });
 }
 
@@ -108,6 +109,7 @@ pub struct FotocellBundle {
     pub switch: Switch,
     pub name: Name,
     pub mesh: Mesh3d,
+    pub pins: PinTerminals,
     material: MeshMaterial3d<StandardMaterial>,
     simbody: RigidBody,
     collider: Collider,
@@ -136,6 +138,7 @@ impl FotocellBundle {
             simbody: RigidBody::Kinematic,
             collision_marker: CollisionEventsEnabled,
             collider,
+            pins: PinTerminals::default(),
         }
     }
     pub fn with_translation(self, translation: Vec3) -> (Self, Transform) {
