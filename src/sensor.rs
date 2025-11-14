@@ -22,6 +22,18 @@ pub fn on_sensor_switch(
     cmd.trigger(PositionReached { entity, position })
 }
 
+#[derive(Component)]
+pub struct FrontLimit;
+
+#[derive(Component)]
+pub struct FrontProximity;
+
+#[derive(Component)]
+pub struct RearLimit;
+
+#[derive(Component)]
+pub struct RearProximity;
+
 #[derive(Component, Clone, Copy, Reflect)]
 pub enum SensorPosition {
     // #[default]

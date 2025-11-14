@@ -5,7 +5,7 @@ use bevy::{color::palettes::css, prelude::*};
 // use bevy_polyline::{material::PolylineMaterialHandle, polyline::PolylineHandle, prelude::*};
 
 use crate::{
-    io::{DioPin, Io, IoDevices, Ip4, PinTerminals, Switch, SwitchSet},
+    io::{Memory, PinIndex, Switch, SwitchSet, WiredTo},
     sensor::{on_sensor_switch, SensorPosition},
     sysorder::InitSet,
 };
@@ -59,20 +59,35 @@ fn load_fotocell_assets(
 #[derive(Component)]
 pub struct DetectorRay;
 
-pub fn on_fotocell_blocked(trigger: On<CollisionStart>, mut cmd: Commands) {
+pub fn on_fotocell_blocked(
+    trigger: On<CollisionStart>,
+    mut cmd: Commands,
+    fotocells: Query<(&WiredTo, &PinIndex), With<SensorRange>>,
+) {
+    let fotocell_id = trigger.event_target();
+    let Ok((wire, pin)) = fotocells.get(fotocell_id) else {
+        return;
+    };
     cmd.trigger(SwitchSet {
-        entity: trigger.event_target(),
-        closed: true,
-        kind: Io::Input,
+        target: wire.0,
+        slot: *pin,
+        value: true,
     });
 }
 
-pub fn on_fotocell_unblocked(trigger: On<CollisionEnd>, mut cmd: Commands) {
+pub fn on_fotocell_unblocked(
+    trigger: On<CollisionEnd>,
+    mut cmd: Commands,
+    fotocells: Query<(&WiredTo, &PinIndex)>,
+) {
+    let fotocell_id = trigger.event_target();
+    let Ok((wire, pin)) = fotocells.get(fotocell_id) else {
+        return;
+    };
     cmd.trigger(SwitchSet {
-        entity: trigger.event_target(),
-        closed: false,
-        kind: Io::Input,
-        PhysicsInterpolationPlugin,
+        target: wire.0,
+        slot: *pin,
+        value: false,
     });
 }
 
@@ -81,22 +96,21 @@ struct DetectorGizmos;
 
 fn render_fotocell_detector(
     mut gizmos: Gizmos<DetectorGizmos>,
-    q: Query<(&Fotocell, &GlobalTransform, &Ip4, &DioPin)>,
-    devices: Res<IoDevices>,
+    q: Query<(&SensorRange, &GlobalTransform, &WiredTo, &PinIndex)>,
+    io: Query<&Memory>,
 ) {
-    for (fc, transform, address, pin) in q {
+    for (fc, transform, wire, pin) in q {
         let start = transform.translation();
-        let end = start - transform.forward() * fc.range;
-
-        let color = match devices.digital_inputs.get(address) {
-            Some(device) => match device.get(pin.as_usize()) {
-                Some(true) => css::GREEN,
-                Some(false) => css::PURPLE,
-                None => css::GRAY, // no value at pin number
-            },
-            None => css::DARK_GRAY, // no device
+        let end = start - transform.forward() * fc.0;
+        let Ok(memory) = io.get(wire.0) else {
+            continue;
         };
-        // let color = match devices.digital_inputs.get(k)
+
+        let color = match memory.get(**pin as usize) {
+            Some(bit) if *bit => css::GREEN,
+            Some(_) => css::PURPLE,
+            None => css::DARK_GRAY,
+        };
 
         gizmos.line(start, end, color);
     }
@@ -105,11 +119,11 @@ fn render_fotocell_detector(
 // fn spawn_fotocell(cmd: &mut Commands, coord: Vec3, io_device: Address, slot: Slot) {}
 #[derive(Bundle)]
 pub struct FotocellBundle {
-    pub fotocell_mark: Fotocell,
-    pub switch: Switch,
+    fotocell: SensorRange,
+    switch: Switch,
+
     pub name: Name,
     pub mesh: Mesh3d,
-    pub pins: PinTerminals,
     material: MeshMaterial3d<StandardMaterial>,
     simbody: RigidBody,
     collider: Collider,
@@ -130,15 +144,14 @@ impl FotocellBundle {
             },
         );
         Self {
-            fotocell_mark: Fotocell { range },
+            fotocell: SensorRange(range),
             name: Name::new(name),
             mesh: Mesh3d(fotocell_assets.emmiter.clone()),
             material: MeshMaterial3d(fotocell_assets.foto_materials.emmiter.clone()),
-            switch: default(),
             simbody: RigidBody::Kinematic,
             collision_marker: CollisionEventsEnabled,
             collider,
-            pins: PinTerminals::default(),
+            switch: default(),
         }
     }
     pub fn with_translation(self, translation: Vec3) -> (Self, Transform) {
@@ -162,15 +175,13 @@ pub struct FotocellAssets {
     foto_materials: FotoCellMaterials,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 /// Adds fotocell behaivor to a Entity
-pub struct Fotocell {
-    range: f32,
-}
+pub struct SensorRange(f32);
 
-impl Fotocell {
+impl SensorRange {
     pub fn new(range: f32) -> Self {
-        Self { range }
+        Self(range)
     }
 }
 
