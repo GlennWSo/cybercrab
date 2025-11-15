@@ -3,6 +3,7 @@ use bevy::prelude::*;
 pub mod derp;
 pub mod fotocell;
 pub mod io;
+pub mod motor;
 pub mod physics;
 pub mod plc;
 pub mod sensor;
@@ -19,7 +20,7 @@ use crate::{
     io::{Address, IoPlugin},
     shiftreg::{RegisterPosition, ShiftRegPlugin},
     sysorder::SysOrderPlugin,
-    tbana::{Direction, PushTo},
+    tbana::{PushTo, Reversiable},
     ui::UIPlugin,
 };
 

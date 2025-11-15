@@ -59,36 +59,26 @@ fn load_fotocell_assets(
 #[derive(Component)]
 pub struct DetectorRay;
 
-pub fn on_fotocell_blocked(
+pub fn on_switch_collision(
     trigger: On<CollisionStart>,
-    mut cmd: Commands,
-    fotocells: Query<(&WiredTo, &PinIndex), With<SensorRange>>,
+    mut switches: Query<&mut Switch, With<WiredTo>>,
 ) {
     let fotocell_id = trigger.event_target();
-    let Ok((wire, pin)) = fotocells.get(fotocell_id) else {
+    let Ok(mut switch) = switches.get_mut(fotocell_id) else {
         return;
     };
-    cmd.trigger(SwitchSet {
-        target: wire.0,
-        slot: *pin,
-        value: true,
-    });
+    **switch = true;
 }
 
-pub fn on_fotocell_unblocked(
+pub fn on_switch_collsion_end(
     trigger: On<CollisionEnd>,
-    mut cmd: Commands,
-    fotocells: Query<(&WiredTo, &PinIndex)>,
+    mut switches: Query<&mut Switch, With<WiredTo>>,
 ) {
     let fotocell_id = trigger.event_target();
-    let Ok((wire, pin)) = fotocells.get(fotocell_id) else {
+    let Ok(mut switch) = switches.get_mut(fotocell_id) else {
         return;
     };
-    cmd.trigger(SwitchSet {
-        target: wire.0,
-        slot: *pin,
-        value: false,
-    });
+    **switch = false;
 }
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
@@ -96,20 +86,17 @@ struct DetectorGizmos;
 
 fn render_fotocell_detector(
     mut gizmos: Gizmos<DetectorGizmos>,
-    q: Query<(&SensorRange, &GlobalTransform, &WiredTo, &PinIndex)>,
-    io: Query<&Memory>,
+    q: Query<(&Switch, &SensorRange, &GlobalTransform, Option<&WiredTo>)>,
 ) {
-    for (fc, transform, wire, pin) in q {
+    for (switch, range, transform, connection) in q {
         let start = transform.translation();
-        let end = start - transform.forward() * fc.0;
-        let Ok(memory) = io.get(wire.0) else {
-            continue;
-        };
+        let vec3 = transform.forward() * range.0;
+        let end = start - vec3;
 
-        let color = match memory.get(**pin as usize) {
-            Some(bit) if *bit => css::GREEN,
-            Some(_) => css::PURPLE,
-            None => css::DARK_GRAY,
+        let color = match (**switch, connection) {
+            (_, None) => css::GREY,
+            (true, Some(_)) => css::GREEN,
+            (false, Some(_)) => css::PURPLE,
         };
 
         gizmos.line(start, end, color);

@@ -14,26 +14,6 @@ use crate::{
 pub struct TransportMotor;
 
 #[derive(Component)]
-pub struct Movimot {
-    pub speed1: f32,
-    pub speed2: f32,
-}
-
-impl Default for Movimot {
-    fn default() -> Self {
-        Self {
-            speed1: 1.0,
-            speed2: 5.0,
-        }
-    }
-}
-
-/// A thing that (phyically) moves the transport target
-/// examples Converbelt, Driving wheels, pushing-piston
-#[derive(Component)]
-pub struct TransportDriver;
-
-#[derive(Component)]
 struct Ratio(f32);
 
 #[derive(Bundle)]

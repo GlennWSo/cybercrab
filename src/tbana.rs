@@ -4,7 +4,7 @@ use avian3d::prelude::{Collider, CollidingEntities, CollisionLayers, LinearVeloc
 use bevy::color::palettes::css;
 use bevy::prelude::{Mesh3d, *};
 
-use crate::fotocell::{on_fotocell_unblocked, FotocellAssets, FotocellBundle, SensorRange};
+use crate::fotocell::{on_switch_collsion_end, FotocellAssets, FotocellBundle, SensorRange};
 use crate::io::{Address, Memory, PinIndex, Switch, WiredTo};
 use crate::physics::PhysLayer;
 use crate::sensor::{
@@ -22,14 +22,14 @@ impl Plugin for TbanaPlugin {
         app.register_type::<Reciver>();
         app.register_type::<PullFrom>();
         app.register_type::<Giver>();
-        app.register_type::<Movimot>();
+        // app.register_type::<Movimot>();
         app.add_message::<PushRequest>();
         app.init_resource::<TBanaAssets>();
         app.add_systems(Startup, load_assets.in_set(InitSet::LoadAssets));
         app.add_systems(
             Update,
             (
-                motor_effect,
+                // motor_effect,
                 // tbana_motor_logic,
                 push_request_handler,
                 request_push,
@@ -42,6 +42,36 @@ impl Plugin for TbanaPlugin {
     }
 }
 
+#[derive(Component)]
+/// Tbana with sensors for slowdown and reverisablity
+pub struct FineReversableTbana {
+    pub front_pos: Entity,
+    pub front_proximity: Entity,
+    pub back_pos: Entity,
+    pub back_proximity: Entity,
+}
+
+#[derive(Bundle)]
+pub struct TBanaBundle {
+    pub auto: AutoMode,
+    pub mesh: Mesh3d,
+    pub material: MeshMaterial3d<StandardMaterial>,
+    pub mode: Mode,
+    pub ready: TransportState,
+}
+
+impl TBanaBundle {
+    pub fn new(tbana_assets: &TBanaAssets) -> Self {
+        Self {
+            auto: AutoMode::default(),
+            mesh: Mesh3d(tbana_assets.base_mesh.clone()),
+            material: MeshMaterial3d(tbana_assets.bana_material.clone()),
+            mode: default(),
+            ready: default(),
+        }
+    }
+}
+
 #[derive(Event)]
 pub struct SwitchDirection;
 
@@ -50,7 +80,7 @@ fn on_switch_tbana_direction(
     mut cmd: Commands,
     mut tbanor: Query<(
         Entity,
-        &mut Direction,
+        &mut Reversiable,
         &mut TransportState,
         &PushTo,
         &RegisterPosition,
@@ -59,8 +89,8 @@ fn on_switch_tbana_direction(
 ) {
     for (me, mut dir, mut state, pushto, pos) in tbanor.iter_mut() {
         match *dir.as_ref() {
-            Direction::Forward => *dir = Direction::Reverse,
-            Direction::Reverse => *dir = Direction::Forward,
+            Reversiable::Forward => *dir = Reversiable::Reverse,
+            Reversiable::Reverse => *dir = Reversiable::Forward,
         }
         // cmd.entity(ent).clear_related::<PushTo>();
         let push_to = pushto.0;
@@ -85,7 +115,7 @@ fn on_switch_tbana_direction(
 }
 
 #[derive(Component, Reflect, Copy, Clone, Debug, Default)]
-pub enum Direction {
+pub enum Reversiable {
     #[default]
     Forward,
     Reverse,
@@ -123,7 +153,7 @@ fn stop_pushing(
 fn on_sensor_pos(
     mut trigger: On<PositionReached>,
     mut cmd: Commands,
-    directions: Query<(&Direction, &TransportState)>,
+    directions: Query<(&Reversiable, &TransportState)>,
 ) {
     let Ok((bana_dir, &state)) = directions.get(trigger.entity) else {
         return;
@@ -135,8 +165,8 @@ fn on_sensor_pos(
     trigger.propagate(false);
     let entity = trigger.entity;
     match (bana_dir, trigger.position) {
-        (Direction::Forward, SensorPosition::LimitFront) => cmd.trigger((StopRunning(entity))),
-        (Direction::Reverse, SensorPosition::LimitBack) => cmd.trigger(StopRunning(entity)),
+        (Reversiable::Forward, SensorPosition::LimitFront) => cmd.trigger((StopRunning(entity))),
+        (Reversiable::Reverse, SensorPosition::LimitBack) => cmd.trigger(StopRunning(entity)),
         // (Direction::Reverse, SensorPosition::ProximityBack) => todo!(),
         // (Direction::Forward, SensorPosition::ProximityFront) => todo!(),
         _ => (),
@@ -181,17 +211,39 @@ fn push_request_handler(
 
 fn on_start_sending(
     trigger: On<StartSending>,
-    mut banor: Query<(&mut TransportState, &Children, &Direction), Without<Movimot>>,
-    motors: Query<&Movimot>,
+    mut banor: Query<(&mut TransportState, &mut MovimotBits, &Reversiable)>,
 ) {
-    todo!()
+    let Ok((mut state, mut movimot, direction)) = banor.get_mut(trigger.entity) else {
+        return;
+    };
+
+    match *state {
+        TransportState::ReadySend => *state = TransportState::Sending,
+        _ => return,
+    }
+
+    match direction {
+        Reversiable::Forward => *movimot = MovimotBits::SlowForward,
+        Reversiable::Reverse => *movimot = MovimotBits::SlowReverse,
+    }
 }
 fn on_start_reciving(
     trigger: On<StartRecive>,
-    mut banor: Query<(&mut TransportState, &Children, &Direction), Without<Movimot>>,
-    motors: Query<&Movimot>,
+    mut banor: Query<(&mut TransportState, &mut MovimotBits, &Reversiable)>,
 ) {
-    todo!()
+    let Ok((mut state, mut movimot, direction)) = banor.get_mut(trigger.event_target()) else {
+        return;
+    };
+
+    match *state {
+        TransportState::ReadyRecive => *state = TransportState::Reciving,
+        _ => return,
+    }
+
+    match direction {
+        Reversiable::Forward => *movimot = MovimotBits::SlowForward,
+        Reversiable::Reverse => *movimot = MovimotBits::SlowReverse,
+    }
 }
 
 fn on_stop_running_tbana(
@@ -208,20 +260,9 @@ fn on_stop_running_tbana(
     }
 }
 
-fn on_stop_running_motor(trigger: On<StopRunning>, motors: Query<&Movimot>) {
-    todo!()
-}
-
 fn set_tbana_ready(
     mut tbana: Query<(&mut TransportState, &RegisterPosition), With<NoProcess>>,
     reg: Res<Register>,
-) {
-    todo!()
-}
-
-fn motor_effect(
-    target: Query<(&CollidingEntities, &mut LinearVelocity), Without<Movimot>>,
-    motors: Query<(&Movimot, &Transform)>,
 ) {
     todo!()
 }
@@ -285,32 +326,6 @@ pub struct TBanaAssets {
     pub wheel_collider: Collider,
 }
 
-#[derive(Bundle)]
-pub struct TbanaBundle {
-    pub tbana: TransportBana,
-    pub auto: AutoMode,
-    pub mesh: Mesh3d,
-    pub material: MeshMaterial3d<StandardMaterial>,
-    pub mode: Mode,
-    pub ready: TransportState,
-    simple: NoProcess,
-}
-
-impl TbanaBundle {
-    pub fn new(tbana_assets: &TBanaAssets) -> Self {
-        todo!()
-        // Self {
-        //     tbana: TransportBana,
-        //     auto: AutoMode::default(),
-        //     mesh: Mesh3d(tbana_assets.base_mesh.clone()),
-        //     material: MeshMaterial3d(tbana_assets.bana_materials.ready.clone()),
-        //     mode: default(),
-        //     ready: default(),
-        //     simple: NoProcess,
-        // }
-    }
-}
-
 #[derive(Component, Reflect)]
 pub struct TransportBana;
 
@@ -319,41 +334,69 @@ pub struct AutoMode {
     enabled: bool,
 }
 
-#[derive(Component)]
-pub struct Wheel;
+#[derive(Component, Reflect)]
+#[component(immutable)]
+pub struct Radius(f32);
 
-// enum MoviMotion {
-//     FastForward,
-//     Forward,
-//     FastReverse,
-//     Reverse,
-//     Stop,
-// }
-
-#[derive(Component, Reflect, Copy, Clone, Debug)]
-pub struct MovimotDQ {}
-
-#[derive(Component, Reflect, Debug)]
-pub struct Movimot {
-    // pub motion: MoviMotion,
-    pub fast_speed: f32,
-    pub slow_speed: f32,
-    pub dq: MovimotDQ,
+#[derive(Component, Reflect, Default)]
+pub struct Wheel {
+    /// surface tangent speed m/s
+    speed: f32,
 }
 
-impl Movimot {}
+#[derive(Component, Reflect, Copy, Clone, Debug, Default)]
+#[repr(u8)]
+pub enum MovimotBits {
+    #[default]
+    Stop = 0b000,
+    SlowForward = 0b010,
+    SlowReverse = 0b100,
+    FastForward = 0b011,
+    FastReverse = 0b101,
+}
+
+#[derive(Component, Reflect, Debug)]
+pub struct MovimotCfg {
+    /// rotations per second
+    pub fast_rps: f32,
+    /// rotations per second`
+    pub slow_rps: f32,
+}
+
+impl Default for MovimotCfg {
+    fn default() -> Self {
+        Self {
+            fast_rps: 10.0,
+            slow_rps: 2.0,
+        }
+    }
+}
+
+impl MovimotCfg {
+    pub fn rpm(fast_rpm: f32, slow_rpm: f32) -> Self {
+        Self {
+            fast_rps: fast_rpm / 60.0,
+            slow_rps: slow_rpm / 60.0,
+        }
+    }
+}
+
+#[derive(Bundle, Default)]
+struct Movimot {
+    io: MovimotBits,
+    cfg: MovimotCfg,
+}
 
 #[derive(Bundle)]
-pub struct TransportWheelBundle {
+pub struct WheelBundle {
     marker: Wheel,
     mesh: Mesh3d,
     material: MeshMaterial3d<StandardMaterial>,
     collider: Collider,
-    motor: Movimot,
 }
 
-impl TransportWheelBundle {
-    pub fn new(assets: &TBanaAssets, dq: MovimotDQ) -> Self {
+impl WheelBundle {
+    pub fn new(assets: &TBanaAssets, dq: MovimotBits) -> Self {
         todo!()
     }
 }

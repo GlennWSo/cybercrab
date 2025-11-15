@@ -50,8 +50,8 @@ pub struct InputNode;
 #[derive(Component, Deref, DerefMut, Reflect, Default)]
 pub struct Switch(bool);
 
-#[derive(Component)]
-pub struct Coil;
+#[derive(Component, Deref, DerefMut, Reflect, Default)]
+pub struct Coil(bool);
 
 #[derive(Bundle)]
 pub struct InputNodeBundle {
