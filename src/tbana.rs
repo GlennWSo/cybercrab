@@ -1,15 +1,9 @@
-use std::borrow::Cow;
-
-use avian3d::prelude::{Collider, CollidingEntities, CollisionLayers, LinearVelocity};
 use bevy::color::palettes::css;
 use bevy::prelude::{Mesh3d, *};
 
-use crate::fotocell::{on_switch_collsion_end, FotocellAssets, FotocellBundle, SensorRange};
-use crate::io::{Address, Memory, PinIndex, Switch, WiredTo};
-use crate::physics::PhysLayer;
-use crate::sensor::{
-    FrontLimit, FrontProximity, PositionReached, RearLimit, RearProximity, SensorPosition,
-};
+use crate::io::{Memory, PinIndex, WiredTo};
+use crate::motor::{MovimotBits, StopRunning};
+use crate::sensor::{FrontLimit, PositionReached, SensorPosition};
 use crate::shiftreg::{Register, RegisterPosition, ShiftOver};
 use crate::sysorder::InitSet;
 
@@ -37,8 +31,6 @@ impl Plugin for TbanaPlugin {
                 set_tbana_ready,
             ),
         );
-        // app.add_observer(on_insert_tbana);
-        app.add_observer(on_switch_tbana_direction);
     }
 }
 
@@ -52,7 +44,7 @@ pub struct FineReversableTbana {
 }
 
 #[derive(Bundle)]
-pub struct TBanaBundle {
+pub struct TbanaBundle {
     pub auto: AutoMode,
     pub mesh: Mesh3d,
     pub material: MeshMaterial3d<StandardMaterial>,
@@ -60,7 +52,7 @@ pub struct TBanaBundle {
     pub ready: TransportState,
 }
 
-impl TBanaBundle {
+impl TbanaBundle {
     pub fn new(tbana_assets: &TBanaAssets) -> Self {
         Self {
             auto: AutoMode::default(),
@@ -74,45 +66,6 @@ impl TBanaBundle {
 
 #[derive(Event)]
 pub struct SwitchDirection;
-
-fn on_switch_tbana_direction(
-    trigger: On<SwitchDirection>,
-    mut cmd: Commands,
-    mut tbanor: Query<(
-        Entity,
-        &mut Reversiable,
-        &mut TransportState,
-        &PushTo,
-        &RegisterPosition,
-    )>,
-    reg: Res<Register>,
-) {
-    for (me, mut dir, mut state, pushto, pos) in tbanor.iter_mut() {
-        match *dir.as_ref() {
-            Reversiable::Forward => *dir = Reversiable::Reverse,
-            Reversiable::Reverse => *dir = Reversiable::Forward,
-        }
-        // cmd.entity(ent).clear_related::<PushTo>();
-        let push_to = pushto.0;
-        cmd.entity(push_to).remove_related::<PushTo>(&[me]);
-        cmd.entity(me).add_related::<PushTo>(&[push_to]);
-        // cmd.entity(from).
-        match *state.as_ref() {
-            TransportState::Reciving => {
-                *state = TransportState::ReadySend;
-            }
-            TransportState::Sending => {
-                cmd.trigger(ShiftOver {
-                    from: me,
-                    to: push_to,
-                });
-                cmd.trigger(StartRecive(me));
-                cmd.trigger(StartSending { entity: push_to });
-            }
-            _ => (),
-        }
-    }
-}
 
 #[derive(Component, Reflect, Copy, Clone, Debug, Default)]
 pub enum Reversiable {
@@ -211,20 +164,16 @@ fn push_request_handler(
 
 fn on_start_sending(
     trigger: On<StartSending>,
-    mut banor: Query<(&mut TransportState, &mut MovimotBits, &Reversiable)>,
+    mut cmd: Commands,
+    mut banor: Query<(&mut TransportState, &Reversiable)>,
 ) {
-    let Ok((mut state, mut movimot, direction)) = banor.get_mut(trigger.entity) else {
+    let Ok((mut state, direction)) = banor.get_mut(trigger.entity) else {
         return;
     };
 
     match *state {
         TransportState::ReadySend => *state = TransportState::Sending,
         _ => return,
-    }
-
-    match direction {
-        Reversiable::Forward => *movimot = MovimotBits::SlowForward,
-        Reversiable::Reverse => *movimot = MovimotBits::SlowReverse,
     }
 }
 fn on_start_reciving(
@@ -264,7 +213,7 @@ fn set_tbana_ready(
     mut tbana: Query<(&mut TransportState, &RegisterPosition), With<NoProcess>>,
     reg: Res<Register>,
 ) {
-    todo!()
+    // todo!()
 }
 
 // fn tbana_motor_effects(motors: Query<(&CollidingEntities, &MovimotDQ)>, io: Res<IoDevices>) {}
@@ -274,40 +223,13 @@ pub fn load_assets(
     mut material_assets: ResMut<Assets<StandardMaterial>>,
     mut tbana_res: ResMut<TBanaAssets>,
 ) {
-    let ready_mode = material_assets.add(StandardMaterial {
-        base_color: css::CORNSILK.into(),
-        ..Default::default()
-    });
-    let run_mode = material_assets.add(StandardMaterial {
-        base_color: css::CHARTREUSE.into(),
-        ..Default::default()
-    });
-    let alarm_mode = material_assets.add(StandardMaterial {
-        base_color: css::CRIMSON.into(),
-        ..Default::default()
-    });
-    // bana_res.bana_materials.ready = ready_mode;
-    todo!();
     let shade = 0.2;
     let ready_mode = material_assets.add(StandardMaterial {
         base_color: css::CORNSILK.darker(shade).into(),
         ..Default::default()
     });
-    let run_mode = material_assets.add(StandardMaterial {
-        base_color: css::CHARTREUSE.darker(shade).into(),
-        ..Default::default()
-    });
-    let alarm_mode = material_assets.add(StandardMaterial {
-        base_color: css::CRIMSON.darker(shade).into(),
-        ..Default::default()
-    });
-    todo!();
-    // tbana_res.wheel_materials.ready = ready_mode;
-    // tbana_res.wheel_materials.running = run_mode;
-    // tbana_res.wheel_materials.alarm = alarm_mode;
-
+    tbana_res.bana_material = ready_mode;
     tbana_res.base_mesh = mesh_assets.add(Extrusion::new(Rectangle::default(), 2.0));
-    tbana_res.wheel_mesh = mesh_assets.add(Extrusion::new(Circle::new(0.1), 0.6));
 }
 
 #[derive(Default)]
@@ -321,9 +243,6 @@ struct ModeMaterials {
 pub struct TBanaAssets {
     pub base_mesh: Handle<Mesh>,
     pub bana_material: Handle<StandardMaterial>,
-    pub wheel_material: Handle<StandardMaterial>,
-    pub wheel_mesh: Handle<Mesh>,
-    pub wheel_collider: Collider,
 }
 
 #[derive(Component, Reflect)]
@@ -332,81 +251,6 @@ pub struct TransportBana;
 #[derive(Reflect, Component, Default, Deref)]
 pub struct AutoMode {
     enabled: bool,
-}
-
-#[derive(Component, Reflect)]
-#[component(immutable)]
-pub struct Radius(f32);
-
-#[derive(Component, Reflect, Default)]
-pub struct Wheel {
-    /// surface tangent speed m/s
-    speed: f32,
-}
-
-#[derive(Component, Reflect, Copy, Clone, Debug, Default)]
-#[repr(u8)]
-pub enum MovimotBits {
-    #[default]
-    Stop = 0b000,
-    SlowForward = 0b010,
-    SlowReverse = 0b100,
-    FastForward = 0b011,
-    FastReverse = 0b101,
-}
-
-#[derive(Component, Reflect, Debug)]
-pub struct MovimotCfg {
-    /// rotations per second
-    pub fast_rps: f32,
-    /// rotations per second`
-    pub slow_rps: f32,
-}
-
-impl Default for MovimotCfg {
-    fn default() -> Self {
-        Self {
-            fast_rps: 10.0,
-            slow_rps: 2.0,
-        }
-    }
-}
-
-impl MovimotCfg {
-    pub fn rpm(fast_rpm: f32, slow_rpm: f32) -> Self {
-        Self {
-            fast_rps: fast_rpm / 60.0,
-            slow_rps: slow_rpm / 60.0,
-        }
-    }
-}
-
-#[derive(Bundle, Default)]
-struct Movimot {
-    io: MovimotBits,
-    cfg: MovimotCfg,
-}
-
-#[derive(Bundle)]
-pub struct WheelBundle {
-    marker: Wheel,
-    mesh: Mesh3d,
-    material: MeshMaterial3d<StandardMaterial>,
-    collider: Collider,
-}
-
-impl WheelBundle {
-    pub fn new(assets: &TBanaAssets, dq: MovimotBits) -> Self {
-        todo!()
-    }
-}
-
-#[derive(Component, Debug, Clone, Copy, Reflect, Default, PartialEq, Eq)]
-pub enum RunState {
-    Ready,
-    Running,
-    #[default]
-    Disabled,
 }
 
 #[derive(Component, Debug, Clone, Copy, Reflect, Default, PartialEq, Eq)]
@@ -432,9 +276,6 @@ pub struct StartSending {
 
 #[derive(EntityEvent)]
 pub struct StartRecive(pub Entity);
-
-#[derive(EntityEvent)]
-pub struct StopRunning(pub Entity);
 
 #[derive(Component, Debug, Clone, Copy, Reflect, Default)]
 pub enum Mode {

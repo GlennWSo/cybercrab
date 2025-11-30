@@ -76,6 +76,7 @@
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath commonRust.buildInputs;
           packages = [
             pkgs.rust-analyzer
+            pkgs.bacon
           ];
         };
         packages.hello = craneLib.buildPackage (commonRust

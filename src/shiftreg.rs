@@ -38,12 +38,15 @@ fn animate_test_detail(
     details: Query<&mut Transform, With<Detail>>,
     tbanor: Query<&Transform, (With<TransportBana>, Without<Detail>)>,
 ) {
-    let max_z = tbanor
+    let Some(reduce) = tbanor
         .into_iter()
         .map(|trans| trans.translation.z)
         .reduce(|acc, v| acc.max(v))
-        .unwrap()
-        + 2.0;
+    else {
+        return;
+    };
+    let max_z = reduce + 2.0;
+
     for mut transform in details {
         if transform.translation.z > max_z {
             transform.translation.z -= 20.0;

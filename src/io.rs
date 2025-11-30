@@ -9,6 +9,7 @@ use bitvec::{
     ptr::{BitRef, Const},
     vec::BitVec,
 };
+use itertools::Itertools;
 
 pub struct IoPlugin;
 
@@ -45,7 +46,10 @@ impl Memory {
 }
 
 #[derive(Component)]
-pub struct InputNode;
+pub struct InputDevice;
+
+#[derive(Component)]
+pub struct OutputDevice;
 
 #[derive(Component, Deref, DerefMut, Reflect, Default)]
 pub struct Switch(bool);
@@ -57,29 +61,54 @@ pub struct Coil(bool);
 pub struct InputNodeBundle {
     pub memory: Memory,
     pub address: Address,
-    pub slots: FreePins,
-    marker: InputNode,
+    marker: InputDevice,
+    pub free_pins: FreePins,
+}
+
+impl InputNodeBundle {
+    pub fn new(address: Address, n_bits: usize) -> Self {
+        Self {
+            memory: Memory::new_bits(n_bits),
+            marker: InputDevice,
+            address,
+            free_pins: FreePins::new(n_bits),
+        }
+    }
+}
+
+#[derive(Bundle)]
+pub struct OutputNodeBundle {
+    pub memory: Memory,
+    pub address: Address,
+    marker: OutputDevice,
+    pub free_pins: FreePins,
+}
+
+impl OutputNodeBundle {
+    pub fn new(address: Address, n_bits: usize) -> Self {
+        Self {
+            memory: Memory::new_bits(n_bits),
+            marker: OutputDevice,
+            free_pins: FreePins::new(n_bits),
+            address,
+        }
+    }
 }
 
 #[derive(Component, Deref, DerefMut, Copy, Clone, Reflect)]
+#[component(immutable)]
 pub struct PinIndex(pub u8);
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct FreePins(BitVec<u8>);
 
-#[derive(Component, Default, Reflect)]
-pub struct TakenPins(Vec<PinIndex>);
+#[derive(Component, Reflect, Clone, Deref, Copy)]
+#[component(immutable)]
+pub struct StaticPins<const N: usize>([PinIndex; N]);
 
-impl TakenPins {
-    pub fn iter(&self) -> impl Iterator<Item = &PinIndex> {
-        self.0.iter()
-    }
-}
-
-impl FromIterator<PinIndex> for TakenPins {
-    fn from_iter<T: IntoIterator<Item = PinIndex>>(iter: T) -> Self {
-        TakenPins(iter.into_iter().collect())
-    }
+pub struct PinnedTo<const N: usize> {
+    pub to: Entity,
+    pub pins: StaticPins<N>,
 }
 
 impl FreePins {
@@ -104,31 +133,21 @@ impl Iterator for FreePins {
 
 impl FreePins {
     pub fn new(size: usize) -> Self {
-        Self(BitVec::repeat(false, size))
+        Self(BitVec::repeat(true, size))
     }
-    pub fn take_pins(&mut self, n: usize) -> Option<TakenPins> {
-        if self.len() < n {
-            return None;
-        }
-        Some(self.take(n).collect())
+
+    pub fn take_pins<const N: usize>(&mut self) -> Option<StaticPins<N>> {
+        self.take(N).collect_array().map(|x| StaticPins(x))
     }
 }
 
 #[derive(Component, Copy, Clone, Reflect)]
-#[relationship(relationship_target=InputPins)]
+#[relationship(relationship_target=WireConnections)]
 pub struct WiredTo(pub Entity);
 
 #[derive(Component, Clone)]
 #[relationship_target(relationship=WiredTo)]
-pub struct InputPins(Vec<Entity>);
-
-#[derive(Component, Clone, Copy)]
-#[relationship(relationship_target=OutputPins)]
-pub struct OutputPinsTo(pub Entity);
-
-#[derive(Component)]
-#[relationship_target(relationship=OutputPinsTo)]
-pub struct OutputPins(Vec<Entity>);
+pub struct WireConnections(Vec<Entity>);
 
 #[derive(EntityEvent, Clone, Copy)]
 pub struct SwitchSet {
